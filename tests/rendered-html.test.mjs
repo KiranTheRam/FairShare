@@ -20,10 +20,19 @@ test("server-renders the FairShare Household dashboard", async () => {
   const html = await response.text();
   assert.match(html, /<title>FairShare — Maple House<\/title>/i);
   assert.match(html, /Good morning, Alex/);
+  assert.match(html, /<html[^>]*data-theme="dark"/i);
   assert.match(html, /You owe Kiran/);
   assert.match(html, /Recurring bills/);
   assert.match(html, /Add bill/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
+});
+
+test("applies public-hosting security headers", async () => {
+  const response = await render();
+  assert.match(response.headers.get("content-security-policy") ?? "", /frame-ancestors 'none'/);
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("x-frame-options"), "DENY");
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
 });
 
 test("ships installable PWA metadata and service worker", async () => {

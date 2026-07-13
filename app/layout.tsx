@@ -24,9 +24,9 @@ export async function generateMetadata(): Promise<Metadata> {
       description: "Shared household bills, made clear.",
       type: "website",
       url: origin,
-      images: [{ url: `${origin}/og.png`, width: 1536, height: 1024, alt: "FairShare household expense dashboard" }],
+      images: [{ url: `${origin}/og-dark.png`, width: 1536, height: 1024, alt: "FairShare household expense dashboard in dark mode" }],
     },
-    twitter: { card: "summary_large_image", title: "FairShare", description: "Shared household bills, made clear.", images: [`${origin}/og.png`] },
+    twitter: { card: "summary_large_image", title: "FairShare", description: "Shared household bills, made clear.", images: [`${origin}/og-dark.png`] },
   };
 }
 
@@ -39,5 +39,5 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body className={geist.variable}>{children}<ServiceWorkerRegistration /></body></html>;
+  return <html lang="en" data-theme="dark" suppressHydrationWarning><body className={geist.variable}>{children}<ServiceWorkerRegistration /></body></html>;
 }

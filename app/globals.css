@@ -18,6 +18,25 @@
   --shadow: 0 16px 45px rgba(28, 48, 41, .08);
 }
 
+[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #edf4f0;
+  --muted: #91a098;
+  --line: #26342e;
+  --canvas: #08110e;
+  --paper: #101a16;
+  --teal: #54bfa0;
+  --teal-dark: #39987d;
+  --mint: #163a30;
+  --coral: #f07b65;
+  --coral-soft: #3b211c;
+  --yellow: #e6b94e;
+  --yellow-soft: #352c16;
+  --blue-soft: #172a43;
+  --violet-soft: #2a2241;
+  --shadow: 0 18px 50px rgba(0, 0, 0, .34);
+}
+
 * { box-sizing: border-box; }
 html { background: var(--canvas); }
 body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-geist-sans), Arial, sans-serif; }
@@ -280,6 +299,101 @@ a { color: inherit; text-decoration: none; }
 .toast span { display: grid; place-items: center; width: 21px; height: 21px; border-radius: 50%; background: #54a88b; }
 .bottom-nav { display: none; }
 .scrim { display: none; }
+
+/* Dark mode is the product default; the preference is stored per device. */
+[data-theme="dark"] .sidebar { background: #0b1511; border-color: #1e2b25; }
+[data-theme="dark"] .household-switcher,
+[data-theme="dark"] .household-menu,
+[data-theme="dark"] .icon-button,
+[data-theme="dark"] .install-pill,
+[data-theme="dark"] .notification-panel,
+[data-theme="dark"] .secondary-button,
+[data-theme="dark"] .quick-action,
+[data-theme="dark"] .date-tile { background: var(--paper); border-color: var(--line); color: var(--ink); }
+[data-theme="dark"] .household-switcher small,
+[data-theme="dark"] .profile-card small,
+[data-theme="dark"] .household-menu small { color: var(--muted); }
+[data-theme="dark"] .side-nav button,
+[data-theme="dark"] .side-link { color: #8f9e97; }
+[data-theme="dark"] .side-nav button:hover,
+[data-theme="dark"] .side-link:hover { background: rgba(255,255,255,.045); color: var(--ink); }
+[data-theme="dark"] .side-nav button.active { background: #1c705e; color: white; }
+[data-theme="dark"] .profile-card { border-color: #203029; }
+[data-theme="dark"] .topbar { background: rgba(8,17,14,.88); border-color: rgba(38,52,46,.9); }
+[data-theme="dark"] .notification-panel button:hover,
+[data-theme="dark"] .household-menu button:hover { background: #15221c; }
+[data-theme="dark"] .avatar { border-color: #101a16; color: #17231f; }
+[data-theme="dark"] .card,
+[data-theme="dark"] .wide-card { box-shadow: 0 3px 18px rgba(0,0,0,.18); }
+[data-theme="dark"] .summary-card { background: linear-gradient(155deg, #173c32 0%, #0b211b 100%); }
+[data-theme="dark"] .attention-item,
+[data-theme="dark"] .bill-row,
+[data-theme="dark"] .calendar-item,
+[data-theme="dark"] .timeline-item,
+[data-theme="dark"] .balance-lines > div,
+[data-theme="dark"] .obligation,
+[data-theme="dark"] .detail-section { border-color: #24322c; background: transparent; }
+[data-theme="dark"] .quick-card { background: #10231c; border-color: #233a30; }
+[data-theme="dark"] .calendar-item em,
+[data-theme="dark"] .member-role { background: #19241f; }
+[data-theme="dark"] .search-box,
+[data-theme="dark"] .form-grid input,
+[data-theme="dark"] .form-grid select,
+[data-theme="dark"] .setup-card input,
+[data-theme="dark"] .setup-card select { background: #0c1612; border-color: var(--line); color: var(--ink); }
+[data-theme="dark"] .segmented,
+[data-theme="dark"] .table-head,
+[data-theme="dark"] .admin-table-head { background: #0b1511; }
+[data-theme="dark"] .segmented button.selected { background: #1a2922; }
+[data-theme="dark"] .bill-table > button,
+[data-theme="dark"] .admin-table > button,
+[data-theme="dark"] .timeline-item { background: var(--paper); }
+[data-theme="dark"] .bill-table > button:hover,
+[data-theme="dark"] .admin-table > button:hover { background: #14211b; }
+[data-theme="dark"] .balance-hero { background: linear-gradient(110deg, #101a16 50%, #10271f); }
+[data-theme="dark"] .relationship-grid > div,
+[data-theme="dark"] .bill-table,
+[data-theme="dark"] .admin-table { border-color: var(--line); }
+[data-theme="dark"] .modal,
+[data-theme="dark"] .modal-header,
+[data-theme="dark"] .drawer-header,
+[data-theme="dark"] .drawer-body,
+[data-theme="dark"] .drawer-actions,
+[data-theme="dark"] .detail-drawer { background: var(--paper); }
+[data-theme="dark"] .modal-note,
+[data-theme="dark"] .setup-info { background: #14211b; }
+[data-theme="dark"] .payment-direction { background: #11271f; }
+[data-theme="dark"] .setup-shell,
+[data-theme="dark"] .admin-shell { background: var(--canvas); }
+[data-theme="dark"] .setup-header,
+[data-theme="dark"] .setup-card,
+[data-theme="dark"] .admin-stats > div,
+[data-theme="dark"] .admin-table-card,
+[data-theme="dark"] .admin-placeholder { background: var(--paper); }
+[data-theme="dark"] .recurring-form { background: #0c1612; }
+[data-theme="dark"] .review-grid > div { background: #0d1713; }
+[data-theme="dark"] .bottom-nav { background: rgba(10,19,15,.96); }
+
+.settings-profile { display: grid; grid-template-columns: 43px 1fr auto; align-items: center; gap: 11px; padding: 2px 0 18px; border-bottom: 1px solid var(--line); }
+.settings-profile > span:nth-child(2) { display: grid; gap: 3px; }
+.settings-profile strong { font-size: 12px; }
+.settings-profile small { color: var(--muted); font-size: 10px; }
+.preference-section { padding: 20px 0; border-bottom: 1px solid var(--line); }
+.preference-section > div:first-child h3 { margin: 0; font-size: 12px; }
+.preference-section > div:first-child p { margin: 4px 0 13px; color: var(--muted); font-size: 9.5px; }
+.theme-options { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.theme-options button { min-height: 64px; display: grid; grid-template-columns: 25px 1fr 18px; align-items: center; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--paper); color: var(--ink); text-align: left; cursor: pointer; }
+.theme-options button.selected { border-color: var(--teal); background: var(--mint); color: var(--ink); box-shadow: inset 0 0 0 1px var(--teal); }
+.theme-options button > span { display: grid; gap: 2px; }
+.theme-options strong { font-size: 10.5px; }
+.theme-options small { color: var(--muted); font-size: 8.5px; }
+.theme-options button > svg:last-child { justify-self: end; color: var(--teal); }
+.notification-preferences { display: grid; gap: 10px; }
+.notification-preferences label { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; }
+.notification-preferences label > span { display: grid; gap: 3px; }
+.notification-preferences strong { font-size: 10px; }
+.notification-preferences small { color: var(--muted); font-size: 8.5px; }
+.notification-preferences input { width: 36px; height: 20px; accent-color: var(--teal); }
 
 /* Household onboarding */
 .setup-shell { min-height: 100vh; background: #f4f6f2; }

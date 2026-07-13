@@ -15,6 +15,7 @@ import {
   Home,
   LayoutDashboard,
   Menu,
+  Moon,
   MoreHorizontal,
   Plus,
   ReceiptText,
@@ -23,6 +24,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Sun,
   Users,
   WalletCards,
   X,
@@ -30,7 +32,8 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 type Tab = "overview" | "bills" | "balances" | "activity";
-type Modal = "bill" | "payment" | "detail" | null;
+type Modal = "bill" | "payment" | "detail" | "settings" | null;
+type Theme = "dark" | "light";
 
 const people = {
   Alex: { initials: "AM", color: "peach" },
@@ -72,6 +75,14 @@ export function HouseholdApp() {
   const [estimated, setEstimated] = useState(false);
   const [splitType, setSplitType] = useState("Equal");
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === "undefined") return "dark";
+    return window.localStorage.getItem("fairshare-theme") === "light" ? "light" : "dark";
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   useEffect(() => {
     const onInstall = (event: Event) => {
@@ -126,6 +137,12 @@ export function HouseholdApp() {
     setSidebarOpen(false);
   };
 
+  const chooseTheme = (nextTheme: Theme) => {
+    setTheme(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
+    window.localStorage.setItem("fairshare-theme", nextTheme);
+  };
+
   return (
     <div className="app-shell">
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
@@ -150,7 +167,7 @@ export function HouseholdApp() {
         <div className="side-bottom">
           <a className="side-link" href="/onboarding"><Users size={19} /> Household settings</a>
           <a className="side-link" href="/admin"><ShieldCheck size={19} /> Admin console</a>
-          <button className="profile-card">
+          <button className="profile-card" onClick={() => setModal("settings")}>
             <Avatar name="Alex" small />
             <span><strong>Alex Morgan</strong><small>alex@maple.house</small></span>
             <MoreHorizontal size={18} />
@@ -236,6 +253,31 @@ export function HouseholdApp() {
           </div>
           <div className="modal-note"><ShieldCheck size={17} /><span>This records a repayment. It won’t change the original bill.</span></div>
           <div className="modal-actions"><button className="secondary-button" onClick={() => setModal(null)}>Cancel</button><button className="primary-button" onClick={recordPayment}>Record $40 payment</button></div>
+        </Modal>
+      )}
+
+      {modal === "settings" && (
+        <Modal title="User settings" subtitle="Preferences for Alex Morgan" onClose={() => setModal(null)}>
+          <div className="settings-profile">
+            <Avatar name="Alex" />
+            <span><strong>Alex Morgan</strong><small>alex@maple.house</small></span>
+            <span className="status-pill done">Active</span>
+          </div>
+          <section className="preference-section">
+            <div><h3>Appearance</h3><p>Choose how FairShare looks on this device.</p></div>
+            <div className="theme-options" role="radiogroup" aria-label="Color theme">
+              <button role="radio" aria-checked={theme === "dark"} className={theme === "dark" ? "selected" : ""} onClick={() => chooseTheme("dark")}><Moon size={19} /><span><strong>Dark</strong><small>Default</small></span>{theme === "dark" && <Check size={16} />}</button>
+              <button role="radio" aria-checked={theme === "light"} className={theme === "light" ? "selected" : ""} onClick={() => chooseTheme("light")}><Sun size={19} /><span><strong>Light</strong><small>Bright surfaces</small></span>{theme === "light" && <Check size={16} />}</button>
+            </div>
+          </section>
+          <section className="preference-section">
+            <div><h3>Household notifications</h3><p>Control the alerts delivered to this device.</p></div>
+            <div className="notification-preferences">
+              <label><span><strong>Bills and material edits</strong><small>New bills, final amounts, and allocation changes</small></span><input type="checkbox" defaultChecked /></label>
+              <label><span><strong>Payments involving you</strong><small>Partial, full, and general balance payments</small></span><input type="checkbox" defaultChecked /></label>
+            </div>
+          </section>
+          <div className="modal-actions"><button className="primary-button" onClick={() => setModal(null)}>Done</button></div>
         </Modal>
       )}
 
