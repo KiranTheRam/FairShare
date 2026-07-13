@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Shared household bills and balances, made clear.",
     start_url: "/",
     display: "standalone",
-    background_color: "#06110e",
-    theme_color: "#08110e",
+    background_color: "#0b0c0f",
+    theme_color: "#0b0c0f",
     orientation: "portrait-primary",
     categories: ["finance", "utilities", "productivity"],
     icons: [

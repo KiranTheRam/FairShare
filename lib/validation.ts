@@ -31,7 +31,8 @@ export const recurringSchema = z.object({ name: z.string().trim().min(2).max(160
   if (value.contributions.reduce((sum, item) => sum + item.amountCents, 0) !== amount) context.addIssue({ code: "custom", message: "Recurring contributions must equal the expected amount" });
   if (value.allocations.reduce((sum, item) => sum + item.amountCents, 0) !== amount) context.addIssue({ code: "custom", message: "Recurring allocations must equal the expected amount" });
 });
+export const billCreateSchema = billSchema.extend({ recurring: recurringSchema.optional() });
 export const notificationPreferenceSchema = z.object({ billsEnabled: z.boolean(), paymentsEnabled: z.boolean(), balanceChangesEnabled: z.boolean() });
 export const pushSubscriptionSchema = z.object({ endpoint: z.string().url().max(2048), keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }) });
-export const userSettingsSchema = z.object({ displayName: z.string().trim().min(2).max(100).optional(), themePreference: z.enum(["dark", "light"]).optional() });
+export const userSettingsSchema = z.object({ displayName: z.string().trim().min(2).max(100).optional(), themePreference: z.enum(["dark", "forest", "light"]).optional() });
 export const passwordChangeSchema = z.object({ currentPassword: z.string().min(1).max(128), newPassword: password });

@@ -1,14 +1,15 @@
 import "server-only";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { billAllocations, billChangeHistory, billContributions, bills, obligations, payments, users } from "@/db/schema";
+import { billAllocations, billChangeHistory, billContributions, bills, obligations, payments, recurringBillTemplates, users } from "@/db/schema";
 import { ApiError } from "./http";
 import { validateMemberIds } from "./access";
 import type { z } from "zod";
-import type { billSchema } from "./validation";
+import type { billCreateSchema, billSchema } from "./validation";
 import { calculateTransfers as calculateLedgerTransfers, LedgerCalculationError } from "./ledger-calculation";
 
 type BillInput = z.infer<typeof billSchema>;
+type BillCreateInput = z.infer<typeof billCreateSchema>;
 function calculateTransfers(input: BillInput) {
   try { return calculateLedgerTransfers(input); }
   catch (error) {
@@ -17,16 +18,27 @@ function calculateTransfers(input: BillInput) {
   }
 }
 
-export async function createBill(householdId: string, actorUserId: string, input: BillInput) {
-  const ids = [...input.contributions.map((item) => item.userId), ...input.allocations.map((item) => item.userId)];
+export async function createBill(householdId: string, actorUserId: string, input: BillCreateInput) {
+  const ids = [...input.contributions.map((item) => item.userId), ...input.allocations.map((item) => item.userId), ...(input.recurring?.contributions.map((item) => item.userId) ?? []), ...(input.recurring?.allocations.map((item) => item.userId) ?? [])];
   await validateMemberIds(householdId, ids);
   const transfers = calculateTransfers(input);
   return getDb().transaction(async (tx) => {
+    let recurringTemplateId = input.recurringTemplateId ?? null;
+    if (input.recurring) {
+      const [template] = await tx.insert(recurringBillTemplates).values({
+        householdId, name: input.recurring.name, expectedAmountCents: input.recurring.expectedAmountCents,
+        cadence: input.recurring.cadence, nextOccurrence: new Date(input.recurring.nextOccurrence),
+        allocationMethod: input.recurring.allocationMethod,
+        templateConfig: { contributions: input.recurring.contributions, allocations: input.recurring.allocations },
+        active: input.recurring.active ?? true, createdByUserId: actorUserId,
+      }).returning();
+      recurringTemplateId = template.id;
+    }
     const [bill] = await tx.insert(bills).values({
       householdId, createdByUserId: actorUserId, name: input.name, amountCents: input.amountCents,
       periodLabel: input.periodLabel, dueDate: input.dueDate ? new Date(input.dueDate) : null,
       amountState: input.amountState, allocationMethod: input.allocationMethod,
-      recurringTemplateId: input.recurringTemplateId ?? null,
+      recurringTemplateId,
     }).returning();
     await tx.insert(billContributions).values(input.contributions.map((item) => ({ billId: bill.id, payerUserId: item.userId, amountCents: item.amountCents, paidAt: new Date(), createdByUserId: actorUserId })));
     await tx.insert(billAllocations).values(input.allocations.map((item) => ({ billId: bill.id, memberUserId: item.userId, amountCents: item.amountCents, percentageBasisPoints: item.percentageBasisPoints })));
