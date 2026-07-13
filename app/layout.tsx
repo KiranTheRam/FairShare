@@ -16,7 +16,14 @@ export async function generateMetadata(): Promise<Metadata> {
     appleWebApp: { capable: true, statusBarStyle: "default", title: "FairShare" },
     formatDetection: { telephone: false },
     robots: { index: false, follow: false, noarchive: true, noimageindex: true },
-    icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+    icons: {
+      icon: [
+        { url: "/app-icon-192.png", sizes: "192x192", type: "image/png" },
+        { url: "/app-icon-512.png", sizes: "512x512", type: "image/png" },
+      ],
+      shortcut: "/app-icon-192.png",
+      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    },
     openGraph: {
       title: "FairShare",
       description: "Shared household bills, made clear.",

@@ -7,13 +7,14 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Shared household bills and balances, made clear.",
     start_url: "/",
     display: "standalone",
-    background_color: "#f6f7f4",
-    theme_color: "#176b5b",
+    background_color: "#06110e",
+    theme_color: "#08110e",
     orientation: "portrait-primary",
     categories: ["finance", "utilities", "productivity"],
     icons: [
-      { src: "/favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
-      { src: "/favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
+      { src: "/app-icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/app-icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/app-icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
     shortcuts: [
       { name: "Add a bill", short_name: "Add bill", url: "/?action=bill" },

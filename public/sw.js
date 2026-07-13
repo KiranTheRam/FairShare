@@ -1,5 +1,5 @@
-const CACHE_NAME = "fairshare-static-v2";
-const SAFE_STATIC = ["/manifest.webmanifest", "/favicon.svg"];
+const CACHE_NAME = "fairshare-static-v3";
+const SAFE_STATIC = ["/manifest.webmanifest", "/app-icon-192.png", "/app-icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SAFE_STATIC)));
