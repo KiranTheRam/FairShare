@@ -1,10 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
 import { headers } from "next/headers";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import "./globals.css";
-
-const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -12,12 +9,13 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const origin = `${protocol}://${host}`;
   return {
-    title: { default: "FairShare — Maple House", template: "%s · FairShare" },
+    title: { default: "FairShare — Household expenses", template: "%s · FairShare" },
     description: "Shared household bills and balances, made clear.",
     applicationName: "FairShare",
     manifest: "/manifest.webmanifest",
     appleWebApp: { capable: true, statusBarStyle: "default", title: "FairShare" },
     formatDetection: { telephone: false },
+    robots: { index: false, follow: false, noarchive: true, noimageindex: true },
     icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
     openGraph: {
       title: "FairShare",
@@ -31,13 +29,13 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#f6f7f4",
-  colorScheme: "light",
+  themeColor: "#08110e",
+  colorScheme: "dark light",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" data-theme="dark" suppressHydrationWarning><body className={geist.variable}>{children}<ServiceWorkerRegistration /></body></html>;
+  return <html lang="en" data-theme="dark" suppressHydrationWarning><body>{children}<ServiceWorkerRegistration /></body></html>;
 }

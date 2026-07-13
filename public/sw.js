@@ -1,8 +1,8 @@
-const CACHE_NAME = "fairshare-shell-v1";
-const APP_SHELL = ["/", "/manifest.webmanifest"];
+const CACHE_NAME = "fairshare-static-v2";
+const SAFE_STATIC = ["/manifest.webmanifest", "/favicon.svg"];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SAFE_STATIC)));
   self.skipWaiting();
 });
 
@@ -12,8 +12,8 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  event.respondWith(fetch(event.request).catch(() => caches.match(event.request).then((cached) => cached || caches.match("/"))));
+  if (event.request.method !== "GET" || event.request.mode === "navigate" || new URL(event.request.url).pathname.startsWith("/api/")) return;
+  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
 });
 
 self.addEventListener("push", (event) => {

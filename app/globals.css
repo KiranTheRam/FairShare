@@ -39,7 +39,7 @@
 
 * { box-sizing: border-box; }
 html { background: var(--canvas); }
-body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-geist-sans), Arial, sans-serif; }
+body { margin: 0; background: var(--canvas); color: var(--ink); font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 button, input, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
@@ -300,7 +300,7 @@ a { color: inherit; text-decoration: none; }
 .bottom-nav { display: none; }
 .scrim { display: none; }
 
-/* Dark mode is the product default; the preference is stored per device. */
+/* Dark mode is the product default; the authenticated preference is stored per account. */
 [data-theme="dark"] .sidebar { background: #0b1511; border-color: #1e2b25; }
 [data-theme="dark"] .household-switcher,
 [data-theme="dark"] .household-menu,
@@ -486,6 +486,44 @@ a { color: inherit; text-decoration: none; }
 .admin-placeholder h2 { margin: 10px 0 6px; font-size: 21px; }
 .admin-placeholder p { max-width: 410px; margin: 0 0 18px; color: var(--muted); font-size: 11px; line-height: 1.55; }
 
+/* Authentication and live-data states */
+.auth-shell, .loading-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 50% 0, #17382e 0, var(--canvas) 45%); }
+.auth-card { width: min(440px, 100%); padding: 38px; border: 1px solid var(--line); border-radius: 22px; background: var(--paper); box-shadow: var(--shadow); }
+.auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 32px; font-size: 19px; font-weight: 800; }
+.auth-card h1 { margin: 5px 0 8px; font-size: 28px; letter-spacing: -1px; }
+.auth-card > p:not(.eyebrow), .empty-copy, .panel-empty { color: var(--muted); font-size: 11px; line-height: 1.55; }
+.auth-card form { display: grid; gap: 14px; margin-top: 24px; }
+.auth-card label { display: grid; gap: 7px; color: var(--muted); font-size: 10px; font-weight: 700; }
+.auth-card input { height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--canvas); color: var(--ink); outline: none; }
+.auth-card input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 18%, transparent); }
+.auth-switch { width: 100%; margin-top: 18px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 9px; }
+.form-error { margin: 12px 0 0; padding: 10px 12px; border: 1px solid #7b3e35; border-radius: 9px; background: var(--coral-soft); color: var(--coral); font-size: 10px; }
+.error-banner { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding: 12px 14px; border: 1px solid #7b3e35; border-radius: 10px; background: var(--coral-soft); color: var(--coral); font-size: 11px; }
+.error-banner button { border: 0; background: transparent; color: inherit; font-weight: 750; cursor: pointer; }
+.loading-screen { align-content: center; gap: 12px; color: var(--muted); font-size: 11px; }
+.loading-card { padding: 40px; color: var(--muted); text-align: center; }
+.panel-empty { padding: 12px; text-align: center; }
+.household-switcher select { width: 17px; color: transparent; border: 0; background: transparent; cursor: pointer; }
+.admin-data-row { display: grid; grid-template-columns: minmax(210px, 1.4fr) 1.5fr .6fr .6fr auto; align-items: center; gap: 12px; min-height: 58px; padding: 10px 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9.5px; }
+.admin-data-row .secondary-button { min-height: 31px; padding: 0 9px; font-size: 9px; }
+.member-checks { display: grid; max-height: 170px; overflow: auto; border: 1px solid var(--line); border-radius: 9px; }
+.member-checks label { display: flex; align-items: center; gap: 8px; padding: 9px; border-top: 1px solid var(--line); color: var(--ink); font-size: 10px; }
+.member-checks label:first-child { border: 0; }
+.member-checks small { margin-left: auto; color: var(--muted); }
+.member-checks input { width: auto; height: auto; accent-color: var(--teal); }
+.money-rows { display: grid; gap: 7px; margin-top: 8px; }
+.money-rows label { position: relative; display: grid; grid-template-columns: 1fr 120px; align-items: center; gap: 10px; color: var(--ink); font-size: 10px; font-weight: 600; }
+.money-rows input { height: 36px; text-align: right; }
+.money-rows em { position: absolute; right: 9px; color: var(--muted); font-size: 8px; font-style: normal; }
+.form-grid fieldset > small { display: block; margin-top: 8px; font-size: 9px; }
+.valid-total { color: var(--teal); }
+.invalid-total { color: var(--coral); }
+.danger-button { margin-right: auto; color: var(--coral); border-color: color-mix(in srgb, var(--coral) 45%, var(--line)); }
+.settings-password { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.settings-password input { height: 39px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--canvas); color: var(--ink); font-size: 10px; }
+.settings-password button { grid-column: 1 / -1; justify-self: end; }
+.push-button { margin-top: 13px; width: 100%; }
+
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(12px); } }
 @keyframes slide-in { from { transform: translateX(30px); opacity: .5; } }
@@ -588,6 +626,9 @@ a { color: inherit; text-decoration: none; }
   .admin-stats { grid-template-columns: 1fr 1fr 1fr; gap: 7px; }
   .admin-stats > div { display: grid; gap: 7px; padding: 10px; }
   .admin-table-card { padding: 11px; }
+  .admin-data-row, .admin-table-head { grid-template-columns: 1fr auto; }
+  .admin-data-row > span:nth-child(2), .admin-data-row > span:nth-child(4), .admin-table-head > span:nth-child(2), .admin-table-head > span:nth-child(4), .admin-table-head > span:nth-child(5) { display: none; }
+  .auth-card { padding: 27px 21px; }
   .admin-toolbar .secondary-button { display: none; }
   .admin-table { border: 0; }
   .admin-table-head { display: none; }

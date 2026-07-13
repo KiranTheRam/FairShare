@@ -1,388 +1,225 @@
 "use client";
 
-import {
-  ArrowDownLeft,
-  ArrowRight,
-  Bell,
-  CalendarDays,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  CircleDollarSign,
-  Clock3,
-  CreditCard,
-  FileText,
-  Home,
-  LayoutDashboard,
-  Menu,
-  Moon,
-  MoreHorizontal,
-  Plus,
-  ReceiptText,
-  Repeat2,
-  Search,
-  Settings,
-  ShieldCheck,
-  Sparkles,
-  Sun,
-  Users,
-  WalletCards,
-  X,
-} from "lucide-react";
+import { ArrowDownLeft, ArrowRight, Bell, Check, CreditCard, FileText, LayoutDashboard, Menu, Moon, Plus, ReceiptText, Settings, Sun, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-type Tab = "overview" | "bills" | "balances" | "activity";
-type Modal = "bill" | "payment" | "detail" | "settings" | null;
 type Theme = "dark" | "light";
+type Tab = "overview" | "bills" | "balances" | "activity";
+type ModalName = "bill" | "edit" | "payment" | "recurring" | "recurring-edit" | "detail" | "settings" | null;
+type User = { id: string; email: string; displayName: string; role: "member" | "administrator" };
+type HouseholdListItem = { id: string; name: string; currency: string };
+type Member = { id: string; displayName: string; email: string };
+type Bill = { id: string; name: string; amountCents: number; periodLabel: string; dueDate?: string | null; amountState: "estimated" | "final"; status: string; createdAt: string };
+type Balance = { payerUserId: string; recipientUserId: string; payerName?: string; recipientName?: string; amountCents: number };
+type Payment = { id: string; payerUserId: string; recipientUserId: string; amountCents: number; note?: string; paidAt: string };
+type Recurring = { id: string; name: string; expectedAmountCents: number | null; cadence: "weekly" | "monthly" | "quarterly" | "yearly"; nextOccurrence: string; allocationMethod: "equal" | "percentage" | "fixed"; templateConfig: { contributions: Array<{ userId: string; amountCents: number }>; allocations: Array<{ userId: string; amountCents: number; percentageBasisPoints?: number }> }; active: boolean };
+type HouseholdData = { household: HouseholdListItem & { timezone: string }; members: Member[]; bills: Bill[]; balances: Balance[]; payments: Payment[]; recurring: Recurring[] };
+type SessionData = { user: User; csrfToken: string; households: HouseholdListItem[] };
+type NotificationItem = { id: string; title: string; body: string; readAt: string | null; createdAt: string };
+type NotificationPrefs = { billsEnabled: boolean; paymentsEnabled: boolean; balanceChangesEnabled: boolean };
+type BillDetailData = { bill: Bill & { revision: number; allocationMethod: string }; contributions: Array<{ id: string; userId: string; displayName: string; amountCents: number; paidAt: string }>; allocations: Array<{ id: string; userId: string; displayName: string; amountCents: number; percentageBasisPoints: number | null }>; obligations: Array<{ id: string; debtorUserId: string; creditorUserId: string; debtorName: string; creditorName: string; originalAmountCents: number; paidAmountCents: number; outstandingAmountCents: number }>; payments: Payment[]; history: Array<{ id: string; changeType: string; changedBy: string; changedAt: string }> };
 
-const people = {
-  Alex: { initials: "AM", color: "peach" },
-  Kiran: { initials: "KP", color: "mint" },
-  Sam: { initials: "SL", color: "blue" },
-  Jordan: { initials: "JR", color: "violet" },
-};
-
-const bills = [
-  { name: "July rent", meta: "Jul 1 · Final", amount: "$2,400.00", status: "2 unsettled", icon: Home, tone: "coral" },
-  { name: "Internet", meta: "Jun 18 · Final", amount: "$92.00", status: "Settled", icon: ReceiptText, tone: "teal" },
-  { name: "Electricity", meta: "Jun 12 · Final", amount: "$148.20", status: "1 unsettled", icon: Sparkles, tone: "yellow" },
-  { name: "Groceries", meta: "Jun 8 · Final", amount: "$86.44", status: "Settled", icon: ReceiptText, tone: "blue" },
-];
-
-function Avatar({ name, small = false }: { name: keyof typeof people; small?: boolean }) {
-  const person = people[name];
-  return <span className={`avatar ${person.color} ${small ? "small" : ""}`} aria-label={name}>{person.initials}</span>;
-}
-
-function Logo() {
-  return (
-    <div className="brand-mark" aria-hidden="true">
-      <span className="roof" />
-      <span className="door" />
-    </div>
-  );
-}
+const money = (cents: number, currency = "USD") => new Intl.NumberFormat(undefined, { style: "currency", currency }).format(cents / 100);
+const initials = (name: string) => name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 
 export function HouseholdApp() {
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const [modal, setModal] = useState<Modal>(null);
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [householdId, setHouseholdId] = useState("");
+  const [data, setData] = useState<HouseholdData | null>(null);
+  const [tab, setTab] = useState<Tab>("overview");
+  const [modal, setModal] = useState<ModalName>(null);
+  const [theme, setTheme] = useState<Theme>("dark");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [householdMenu, setHouseholdMenu] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const [billName, setBillName] = useState("");
-  const [billAmount, setBillAmount] = useState("");
-  const [estimated, setEstimated] = useState(false);
-  const [splitType, setSplitType] = useState("Equal");
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [toast, setToast] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "dark";
-    return window.localStorage.getItem("fairshare-theme") === "light" ? "light" : "dark";
-  });
+  const [billDetail, setBillDetail] = useState<BillDetailData | null>(null);
+  const [paymentContext, setPaymentContext] = useState<(Balance & { billId: string }) | null>(null);
+  const [selectedRecurring, setSelectedRecurring] = useState<Recurring | null>(null);
+  const [preferences, setPreferences] = useState<NotificationPrefs>({ billsEnabled: true, paymentsEnabled: true, balanceChangesEnabled: true });
+  const [vapidPublicKey, setVapidPublicKey] = useState<string | null>(null);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
-
-  useEffect(() => {
-    const onInstall = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event);
-    };
+    document.documentElement.dataset.theme = "dark";
+    Promise.all([fetch("/api/session", { cache: "no-store" }), fetch("/api/settings", { cache: "no-store" })]).then(async ([sessionResponse, settingsResponse]) => {
+      if (sessionResponse.status === 401) { location.href = "/login"; return; }
+      const sessionData = await sessionResponse.json() as SessionData;
+      const settings = settingsResponse.ok ? await settingsResponse.json() : null;
+      setSession(sessionData);
+      const savedTheme = settings?.account?.themePreference === "light" ? "light" : "dark";
+      setTheme(savedTheme); document.documentElement.dataset.theme = savedTheme;
+      if (settings?.notifications) setPreferences({ billsEnabled: settings.notifications.billsEnabled, paymentsEnabled: settings.notifications.paymentsEnabled, balanceChangesEnabled: settings.notifications.balanceChangesEnabled });
+      setVapidPublicKey(settings?.vapidPublicKey ?? null);
+      const savedHousehold = localStorage.getItem("fairshare-household");
+      setHouseholdId(sessionData.households.some((item) => item.id === savedHousehold) ? savedHousehold! : sessionData.households[0]?.id ?? "");
+      if (!sessionData.households.length) setLoading(false);
+    }).catch(() => { setError("FairShare could not load your account."); setLoading(false); });
+    const onInstall = (event: Event) => { event.preventDefault(); setInstallPrompt(event); };
     window.addEventListener("beforeinstallprompt", onInstall);
     return () => window.removeEventListener("beforeinstallprompt", onInstall);
   }, []);
 
-  useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 3200);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
+  // refresh is intentionally keyed only by the selected Household.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (householdId) void refresh(); }, [householdId]);
+  useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(""), 3200); return () => clearTimeout(timer); }, [toast]);
 
-  const title = useMemo(() => ({
-    overview: "Good morning, Alex",
-    bills: "Bills",
-    balances: "Balances",
-    activity: "Household activity",
-  }[activeTab]), [activeTab]);
+  async function refresh() {
+    setLoading(true); setError("");
+    try {
+      const [response, recurringResponse] = await Promise.all([fetch(`/api/households/${householdId}`, { cache: "no-store" }), fetch(`/api/households/${householdId}/recurring`, { cache: "no-store" })]);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Unable to load household");
+      const recurringBody = recurringResponse.ok ? await recurringResponse.json() : { recurring: [] };
+      setData({ ...body, recurring: recurringBody.recurring }); localStorage.setItem("fairshare-household", householdId);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load household"); }
+    finally { setLoading(false); }
+  }
 
-  const handleInstall = async () => {
-    if (installPrompt && "prompt" in installPrompt) {
-      await (installPrompt as Event & { prompt: () => Promise<void> }).prompt();
-      setInstallPrompt(null);
-      return;
+  async function mutate(path: string, method: string, body?: unknown) {
+    if (!session) throw new Error("Session is unavailable");
+    const response = await fetch(path, { method, headers: { "content-type": "application/json", "x-csrf-token": session.csrfToken }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error ?? "Request failed");
+    return result;
+  }
+
+  async function chooseTheme(next: Theme) {
+    const previous = theme; setTheme(next); document.documentElement.dataset.theme = next;
+    try { await mutate("/api/settings", "PATCH", { themePreference: next }); }
+    catch (cause) { setTheme(previous); document.documentElement.dataset.theme = previous; setToast(cause instanceof Error ? cause.message : "Theme could not be saved"); }
+  }
+
+  async function openNotifications() {
+    setNotificationsOpen((value) => !value);
+    const response = await fetch("/api/notifications", { cache: "no-store" });
+    if (response.ok) {
+      const items = (await response.json()).notifications as NotificationItem[];
+      setNotifications(items);
+      if (items.some((item) => !item.readAt)) {
+        await mutate("/api/notifications", "PATCH");
+        setNotifications(items.map((item) => ({ ...item, readAt: item.readAt ?? new Date().toISOString() })));
+      }
     }
-    if ("Notification" in window && Notification.permission === "default") {
-      await Notification.requestPermission();
-      setToast("Notifications are ready for this Household");
-    } else {
-      setToast("Use your browser menu to add FairShare to your home screen");
-    }
-  };
+  }
 
-  const recordBill = () => {
-    setModal(null);
-    setBillName("");
-    setBillAmount("");
-    setToast("Bill added to Maple House");
-  };
+  async function openBill(billId: string) {
+    const response = await fetch(`/api/households/${householdId}/bills/${billId}`, { cache: "no-store" });
+    const body = await response.json();
+    if (!response.ok) { setToast(body.error ?? "Bill detail could not be loaded"); return; }
+    setBillDetail(body); setModal("detail");
+  }
 
-  const recordPayment = () => {
-    setModal(null);
-    setToast("Payment recorded — Kiran will be notified");
-  };
+  function openPayment(context: (Balance & { billId: string }) | null = null) { setPaymentContext(context); setModal("payment"); }
 
-  const selectTab = (tab: Tab) => {
-    setActiveTab(tab);
-    setSidebarOpen(false);
-  };
+  async function logout() {
+    try { await mutate("/api/auth/logout", "POST"); } finally { location.href = "/login"; }
+  }
 
-  const chooseTheme = (nextTheme: Theme) => {
-    setTheme(nextTheme);
-    document.documentElement.dataset.theme = nextTheme;
-    window.localStorage.setItem("fairshare-theme", nextTheme);
-  };
+  async function install() {
+    if (installPrompt && "prompt" in installPrompt) await (installPrompt as Event & { prompt: () => Promise<void> }).prompt();
+    else setToast("Use your browser menu to install FairShare on this device.");
+  }
 
-  return (
-    <div className="app-shell">
-      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-        <div className="brand"><Logo /><span>FairShare</span></div>
-        <button className="household-switcher" onClick={() => setHouseholdMenu(!householdMenu)}>
-          <span className="house-avatar">MH</span>
-          <span><small>Household</small><strong>Maple House</strong></span>
-          <ChevronDown size={17} />
-        </button>
-        {householdMenu && (
-          <div className="household-menu">
-            <button><span className="house-avatar tiny">LH</span><span><strong>Lake House</strong><small>3 members</small></span></button>
-            <button className="new-house"><Plus size={15} /> Join a Household</button>
-          </div>
-        )}
-        <nav className="side-nav" aria-label="Household navigation">
-          <NavButton active={activeTab === "overview"} icon={LayoutDashboard} label="Overview" onClick={() => selectTab("overview")} />
-          <NavButton active={activeTab === "bills"} icon={ReceiptText} label="Bills" onClick={() => selectTab("bills")} badge="2" />
-          <NavButton active={activeTab === "balances"} icon={WalletCards} label="Balances" onClick={() => selectTab("balances")} />
-          <NavButton active={activeTab === "activity"} icon={FileText} label="Activity" onClick={() => selectTab("activity")} />
-        </nav>
-        <div className="side-bottom">
-          <a className="side-link" href="/onboarding"><Users size={19} /> Household settings</a>
-          <a className="side-link" href="/admin"><ShieldCheck size={19} /> Admin console</a>
-          <button className="profile-card" onClick={() => setModal("settings")}>
-            <Avatar name="Alex" small />
-            <span><strong>Alex Morgan</strong><small>alex@maple.house</small></span>
-            <MoreHorizontal size={18} />
-          </button>
-        </div>
-      </aside>
+  async function enablePush() {
+    if (!vapidPublicKey || !("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("Web Push is not configured on this server");
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") throw new Error("Notification permission was not granted");
+    const registration = await navigator.serviceWorker.ready;
+    const padding = "=".repeat((4 - vapidPublicKey.length % 4) % 4);
+    const bytes = Uint8Array.from(atob((vapidPublicKey + padding).replace(/-/g, "+").replace(/_/g, "/")), (character) => character.charCodeAt(0));
+    const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes });
+    await mutate("/api/settings/push", "POST", subscription.toJSON());
+    setToast("Push notifications are enabled on this device.");
+  }
 
-      {sidebarOpen && <button className="scrim" aria-label="Close menu" onClick={() => setSidebarOpen(false)} />}
+  const myBalances = useMemo(() => data?.balances.filter((item) => item.payerUserId === session?.user.id || item.recipientUserId === session?.user.id) ?? [], [data, session]);
+  const net = myBalances.reduce((sum, item) => sum + (item.recipientUserId === session?.user.id ? item.amountCents : -item.amountCents), 0);
+  const title = tab === "overview" ? `Hello, ${session?.user.displayName.split(" ")[0] ?? "there"}` : tab[0].toUpperCase() + tab.slice(1);
 
-      <main className="main">
-        <header className="topbar">
-          <button className="icon-button menu-button" aria-label="Open menu" onClick={() => setSidebarOpen(true)}><Menu size={22} /></button>
-          <button className="mobile-house" onClick={() => setSidebarOpen(true)}><span className="house-avatar tiny">MH</span><strong>Maple House</strong><ChevronDown size={15} /></button>
-          <div className="top-actions">
-            <button className="install-pill" onClick={handleInstall}><ArrowDownLeft size={16} /> <span>Install app</span></button>
-            <button className="icon-button notification-button" aria-label="Notifications" onClick={() => setNotificationsOpen(!notificationsOpen)}>
-              <Bell size={20} /><span className="unread-dot" />
-            </button>
-            <Avatar name="Alex" small />
-          </div>
-          {notificationsOpen && (
-            <div className="notification-panel">
-              <div className="panel-title"><strong>Notifications</strong><span>2 new</span></div>
-              <button><span className="activity-icon coral"><ReceiptText size={17} /></span><span><strong>July rent was added</strong><small>Kiran added a $2,400 bill · 18m</small></span></button>
-              <button><span className="activity-icon mint"><CreditCard size={17} /></span><span><strong>Sam paid you $75</strong><small>General balance payment · 2h</small></span></button>
-              <button className="notification-settings"><Settings size={15} /> Notification preferences</button>
-            </div>
-          )}
-        </header>
+  if (loading && !session) return <main className="loading-screen"><span className="brand-mark"><span className="roof" /><span className="door" /></span><p>Loading FairShare…</p></main>;
+  if (session && !session.households.length) return <EmptyAccount user={session.user} onLogout={logout} />;
 
-        <div className="content-wrap">
-          <div className="page-heading">
-            <div>
-              <p className="eyebrow">MAPLE HOUSE · JULY 2026</p>
-              <h1>{title}</h1>
-              <p>{activeTab === "overview" ? "Here’s where everyone stands today." : tabSubtitle(activeTab)}</p>
-            </div>
-            <div className="heading-actions">
-              <button className="secondary-button" onClick={() => setModal("payment")}><ArrowRight size={17} /> Record payment</button>
-              <button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button>
-            </div>
-          </div>
-
-          {activeTab === "overview" && <Overview onBill={() => setModal("bill")} onPayment={() => setModal("payment")} onDetail={() => setModal("detail")} onNavigate={selectTab} />}
-          {activeTab === "bills" && <BillsView onDetail={() => setModal("detail")} />}
-          {activeTab === "balances" && <BalancesView onPayment={() => setModal("payment")} />}
-          {activeTab === "activity" && <ActivityView />}
-        </div>
-      </main>
-
-      <nav className="bottom-nav" aria-label="Mobile navigation">
-        <MobileNav active={activeTab === "overview"} icon={LayoutDashboard} label="Home" onClick={() => selectTab("overview")} />
-        <MobileNav active={activeTab === "bills"} icon={ReceiptText} label="Bills" onClick={() => selectTab("bills")} />
-        <button className="fab" aria-label="Add bill" onClick={() => setModal("bill")}><Plus size={24} /></button>
-        <MobileNav active={activeTab === "balances"} icon={WalletCards} label="Balances" onClick={() => selectTab("balances")} />
-        <MobileNav active={activeTab === "activity"} icon={FileText} label="Activity" onClick={() => selectTab("activity")} />
-      </nav>
-
-      {modal === "bill" && (
-        <Modal title="Add a bill" subtitle="Maple House" onClose={() => setModal(null)}>
-          <div className="form-grid">
-            <label className="full">Bill name<input value={billName} onChange={(e) => setBillName(e.target.value)} placeholder="e.g. July internet" autoFocus /></label>
-            <label>Amount<div className="currency-input"><span>$</span><input inputMode="decimal" value={billAmount} onChange={(e) => setBillAmount(e.target.value)} placeholder="0.00" /></div></label>
-            <label>Due date<input type="date" defaultValue="2026-07-18" /></label>
-            <label className="toggle-row full"><span><strong>This amount is estimated</strong><small>You can finalize it later without losing history.</small></span><input type="checkbox" checked={estimated} onChange={(e) => setEstimated(e.target.checked)} /></label>
-            <fieldset className="full"><legend>How should it be split?</legend><div className="segmented">{["Equal", "Percent", "Amounts"].map((type) => <button type="button" className={splitType === type ? "selected" : ""} onClick={() => setSplitType(type)} key={type}>{type}</button>)}</div></fieldset>
-            <div className="allocation-preview full">
-              {(["Alex", "Kiran", "Sam", "Jordan"] as const).map((name) => <div key={name}><Avatar name={name} small /><span>{name}</span><strong>{billAmount ? `$${(Number(billAmount || 0) / 4).toFixed(2)}` : "25%"}</strong></div>)}
-              <p><Check size={15} /> Allocation adds up to {splitType === "Percent" ? "100%" : billAmount ? `$${Number(billAmount).toFixed(2)}` : "the total"}</p>
-            </div>
-          </div>
-          <div className="modal-actions"><button className="secondary-button" onClick={() => setModal(null)}>Cancel</button><button className="primary-button" disabled={!billName || !billAmount} onClick={recordBill}>Add bill</button></div>
-        </Modal>
-      )}
-
-      {modal === "payment" && (
-        <Modal title="Record a payment" subtitle="Reduce a balance between two people" onClose={() => setModal(null)}>
-          <div className="payment-direction"><Avatar name="Alex" /><ArrowRight size={20} /><Avatar name="Kiran" /><span><strong>You’re paying Kiran</strong><small>Current balance: $140.00</small></span></div>
-          <div className="form-grid">
-            <label className="full">Amount<div className="currency-input large"><span>$</span><input inputMode="decimal" defaultValue="40.00" /></div></label>
-            <label className="full">Apply to<select defaultValue="rent"><option value="rent">July rent · $140 remaining</option><option value="general">General balance payment</option></select></label>
-            <label className="full">Note <small>(optional)</small><input placeholder="e.g. Venmo payment" /></label>
-          </div>
-          <div className="modal-note"><ShieldCheck size={17} /><span>This records a repayment. It won’t change the original bill.</span></div>
-          <div className="modal-actions"><button className="secondary-button" onClick={() => setModal(null)}>Cancel</button><button className="primary-button" onClick={recordPayment}>Record $40 payment</button></div>
-        </Modal>
-      )}
-
-      {modal === "settings" && (
-        <Modal title="User settings" subtitle="Preferences for Alex Morgan" onClose={() => setModal(null)}>
-          <div className="settings-profile">
-            <Avatar name="Alex" />
-            <span><strong>Alex Morgan</strong><small>alex@maple.house</small></span>
-            <span className="status-pill done">Active</span>
-          </div>
-          <section className="preference-section">
-            <div><h3>Appearance</h3><p>Choose how FairShare looks on this device.</p></div>
-            <div className="theme-options" role="radiogroup" aria-label="Color theme">
-              <button role="radio" aria-checked={theme === "dark"} className={theme === "dark" ? "selected" : ""} onClick={() => chooseTheme("dark")}><Moon size={19} /><span><strong>Dark</strong><small>Default</small></span>{theme === "dark" && <Check size={16} />}</button>
-              <button role="radio" aria-checked={theme === "light"} className={theme === "light" ? "selected" : ""} onClick={() => chooseTheme("light")}><Sun size={19} /><span><strong>Light</strong><small>Bright surfaces</small></span>{theme === "light" && <Check size={16} />}</button>
-            </div>
-          </section>
-          <section className="preference-section">
-            <div><h3>Household notifications</h3><p>Control the alerts delivered to this device.</p></div>
-            <div className="notification-preferences">
-              <label><span><strong>Bills and material edits</strong><small>New bills, final amounts, and allocation changes</small></span><input type="checkbox" defaultChecked /></label>
-              <label><span><strong>Payments involving you</strong><small>Partial, full, and general balance payments</small></span><input type="checkbox" defaultChecked /></label>
-            </div>
-          </section>
-          <div className="modal-actions"><button className="primary-button" onClick={() => setModal(null)}>Done</button></div>
-        </Modal>
-      )}
-
-      {modal === "detail" && <BillDetail onClose={() => setModal(null)} onPayment={() => setModal("payment")} />}
-      {toast && <div className="toast"><span><Check size={16} /></span>{toast}</div>}
-    </div>
-  );
+  return <div className="app-shell">
+    <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+      <div className="brand"><span className="brand-mark"><span className="roof" /><span className="door" /></span><span>FairShare</span></div>
+      <label className="household-switcher"><span className="house-avatar">{initials(data?.household.name ?? "House")}</span><span><small>Household</small><strong>{data?.household.name ?? "Loading…"}</strong></span>
+        <select aria-label="Choose household" value={householdId} onChange={(e) => setHouseholdId(e.target.value)}>{session?.households.map((household) => <option key={household.id} value={household.id}>{household.name}</option>)}</select>
+      </label>
+      <nav className="side-nav">{(["overview", "bills", "balances", "activity"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => { setTab(item); setSidebarOpen(false); }}>{item === "overview" ? <LayoutDashboard size={19} /> : item === "bills" ? <ReceiptText size={19} /> : item === "balances" ? <WalletCards size={19} /> : <FileText size={19} />}<span>{item[0].toUpperCase() + item.slice(1)}</span></button>)}</nav>
+      <div className="side-bottom"><button className="side-link" onClick={() => setModal("settings")}><Settings size={19} /> User settings</button><button className="profile-card" onClick={() => setModal("settings")}><Avatar name={session?.user.displayName ?? ""} /><span><strong>{session?.user.displayName}</strong><small>{session?.user.email}</small></span></button></div>
+    </aside>
+    {sidebarOpen && <button className="scrim" aria-label="Close menu" onClick={() => setSidebarOpen(false)} />}
+    <main className="main"><header className="topbar"><button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open menu"><Menu size={22} /></button><div className="top-actions"><button className="install-pill" onClick={install}><ArrowDownLeft size={16} /> Install app</button><button className="icon-button notification-button" onClick={openNotifications} aria-label="Notifications"><Bell size={20} />{notifications.some((item) => !item.readAt) && <span className="unread-dot" />}</button><Avatar name={session?.user.displayName ?? ""} /></div>
+      {notificationsOpen && <div className="notification-panel"><div className="panel-title"><strong>Notifications</strong><span>{notifications.filter((item) => !item.readAt).length} new</span></div>{notifications.length ? notifications.slice(0, 8).map((item) => <button key={item.id}><span className="activity-icon mint"><Bell size={17} /></span><span><strong>{item.title}</strong><small>{item.body}</small></span></button>) : <p className="panel-empty">You’re all caught up.</p>}</div>}
+    </header>
+    <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><h1>{title}</h1><p>{tab === "overview" ? "Here’s where everyone stands today." : tab === "bills" ? "Every shared expense in one auditable ledger." : tab === "balances" ? "Open person-to-person obligations after repayments." : "Recent bills and payments."}</p></div><div className="heading-actions"><button className="secondary-button" disabled={!data?.balances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Record payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div></div>
+      {error && <div className="error-banner">{error}<button onClick={refresh}>Try again</button></div>}
+      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onBill={() => setModal("bill")} onPayment={() => openPayment()} onBillDetail={openBill} /> : tab === "bills" ? <Bills data={data!} onRecurring={() => setModal("recurring")} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} onBillDetail={openBill} /> : tab === "balances" ? <Balances data={data!} user={session!.user} onPayment={() => openPayment()} /> : <Activity data={data!} />}
+    </div></main>
+    <nav className="bottom-nav">{(["overview", "bills"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}<button className="fab" onClick={() => setModal("bill")}><Plus size={24} /></button>{(["balances", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}</nav>
+    {modal === "bill" && data && <BillModal data={data} close={() => setModal(null)} save={async (body) => { await mutate(`/api/households/${householdId}/bills`, "POST", body); setModal(null); setToast("Bill added to the household ledger."); await refresh(); }} />}
+    {modal === "edit" && data && billDetail && <BillModal data={data} initial={billDetail} close={() => setModal("detail")} save={async (body) => { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "PATCH", body); setModal(null); setToast("Bill updated and balances recalculated."); await refresh(); }} />}
+    {modal === "payment" && data && <PaymentModal data={data} specific={paymentContext} close={() => { setModal(null); setPaymentContext(null); }} save={async (body) => { await mutate(`/api/households/${householdId}/payments`, "POST", body); setModal(null); setPaymentContext(null); setToast("Payment recorded."); await refresh(); }} />}
+    {modal === "recurring" && data && <RecurringModal data={data} close={() => setModal(null)} save={async (body) => { await mutate(`/api/households/${householdId}/recurring`, "POST", body); setModal(null); setToast("Recurring schedule created."); await refresh(); }} />}
+    {modal === "recurring-edit" && data && selectedRecurring && <RecurringModal data={data} initial={selectedRecurring} close={() => setModal(null)} save={async (body) => { await mutate(`/api/households/${householdId}/recurring/${selectedRecurring.id}`, "PATCH", body); setModal(null); setSelectedRecurring(null); setToast("Future recurring bills will use the updated schedule."); await refresh(); }} />}
+    {modal === "settings" && session && <SettingsModal session={session} theme={theme} preferences={preferences} pushAvailable={Boolean(vapidPublicKey)} chooseTheme={chooseTheme} updatePreferences={async (next) => { await mutate("/api/settings", "PATCH", { notifications: next }); setPreferences(next); }} enablePush={enablePush} changePassword={async (currentPassword, newPassword) => { await mutate("/api/settings/password", "POST", { currentPassword, newPassword }); location.href = "/login"; }} close={() => setModal(null)} logout={logout} />}
+    {modal === "detail" && billDetail && <BillDetailModal detail={billDetail} userId={session?.user.id ?? ""} currency={data?.household.currency ?? "USD"} close={() => setModal(null)} edit={() => setModal("edit")} remove={async () => { if (!confirm("Remove this bill and recalculate Household balances? The audit record is retained.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "DELETE"); setModal(null); setToast("Bill removed and balances recalculated."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Bill could not be removed"); } }} record={(item) => openPayment({ billId: billDetail.bill.id, payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, payerName: item.debtorName, recipientName: item.creditorName, amountCents: item.outstandingAmountCents })} />}
+    {toast && <div className="toast"><span><Check size={16} /></span>{toast}</div>}
+  </div>;
 }
 
-function NavButton({ active, icon: Icon, label, badge, onClick }: { active: boolean; icon: typeof Home; label: string; badge?: string; onClick: () => void }) {
-  return <button className={active ? "active" : ""} onClick={onClick} aria-current={active ? "page" : undefined}><Icon size={19} /><span>{label}</span>{badge && <em>{badge}</em>}</button>;
+function Avatar({ name }: { name: string }) { return <span className="avatar mint small" aria-label={name}>{initials(name)}</span>; }
+function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "overview" ? LayoutDashboard : item === "bills" ? ReceiptText : item === "balances" ? WalletCards : FileText; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{item === "overview" ? "Home" : item[0].toUpperCase() + item.slice(1)}</small></button>; }
+
+function Overview({ data, user, net, onBill, onPayment, onBillDetail }: { data: HouseholdData; user: User; net: number; onBill: () => void; onPayment: () => void; onBillDetail: (id: string) => void }) {
+  return <div className="dashboard-grid"><section className="summary-card"><div className="summary-top"><span className="summary-icon"><WalletCards size={21} /></span><span>Your overall position</span></div><p>{net < 0 ? "You owe" : "You are owed"}</p><h2>{money(Math.abs(net), data.household.currency)}</h2><span className="delta">Across {data.balances.length} open balance{data.balances.length === 1 ? "" : "s"}</span><div className="summary-divider" />{data.balances.filter((item) => item.payerUserId === user.id || item.recipientUserId === user.id).slice(0, 3).map((item) => <div className="mini-balance" key={`${item.payerUserId}:${item.recipientUserId}`}><div className="avatar-pair"><Avatar name={item.payerName ?? ""} /><Avatar name={item.recipientName ?? ""} /></div><span><small>{item.payerUserId === user.id ? `You owe ${item.recipientName}` : `${item.payerName} owes you`}</small><strong>{money(item.amountCents, data.household.currency)}</strong></span></div>)}</section>
+    <section className="card recent-card"><div className="section-heading"><div><p className="eyebrow">RECENT BILLS</p><h3>Latest household expenses</h3></div><span className="count-badge">{data.bills.length}</span></div><div className="bill-list">{data.bills.slice(0, 5).map((bill) => <BillRow key={bill.id} bill={bill} currency={data.household.currency} onClick={() => onBillDetail(bill.id)} />)}{!data.bills.length && <p className="empty-copy">No bills yet. Add the first shared expense.</p>}</div></section>
+    <section className="quick-card"><div><span className="quick-icon"><CreditCard size={22} /></span><span><strong>Keep the ledger current</strong><small>Add an expense or settle an open balance.</small></span></div><div><button className="quick-action" onClick={onBill}><Plus size={18} /><span><strong>Add a bill</strong><small>Split an expense</small></span></button><button className="quick-action" onClick={onPayment} disabled={!data.balances.length}><CreditCard size={18} /><span><strong>Record payment</strong><small>Settle a balance</small></span></button></div></section></div>;
 }
 
-function MobileNav({ active, icon: Icon, label, onClick }: { active: boolean; icon: typeof Home; label: string; onClick: () => void }) {
-  return <button className={active ? "active" : ""} onClick={onClick}><Icon size={21} /><small>{label}</small></button>;
+function BillRow({ bill, currency, onClick }: { bill: Bill; currency: string; onClick?: () => void }) { return <button className="bill-row" onClick={onClick}><span className="activity-icon coral"><ReceiptText size={18} /></span><span className="bill-main"><strong>{bill.name}</strong><small>{bill.periodLabel} · {bill.amountState}</small></span><span className="bill-amount"><strong>{money(bill.amountCents, currency)}</strong><small className={bill.status === "settled" ? "settled" : ""}>{bill.status}</small></span></button>; }
+function Bills({ data, onRecurring, onEditRecurring, onBillDetail }: { data: HouseholdData; onRecurring: () => void; onEditRecurring: (item: Recurring) => void; onBillDetail: (id: string) => void }) { return <div className="balances-layout"><section className="wide-card"><div className="month-total"><span><small>TOTAL BILLS</small><strong>{data.bills.length}</strong></span><span><small>RECORDED SPEND</small><strong>{money(data.bills.reduce((sum, bill) => sum + bill.amountCents, 0), data.household.currency)}</strong></span><span><small>OPEN BALANCES</small><strong>{money(data.balances.reduce((sum, item) => sum + item.amountCents, 0), data.household.currency)}</strong></span></div><div className="bill-list">{data.bills.map((bill) => <BillRow key={bill.id} bill={bill} currency={data.household.currency} onClick={() => onBillDetail(bill.id)} />)}{!data.bills.length && <p className="empty-copy">No bills have been recorded.</p>}</div></section><section className="wide-card"><div className="section-heading"><div><h3>Recurring schedules</h3><p>Edit a schedule for future instances; edit a generated bill to change only that instance.</p></div><button className="secondary-button" onClick={onRecurring}><Plus size={16} /> Add schedule</button></div><div className="bill-list">{data.recurring.map((item) => <button className="bill-row" key={item.id} onClick={() => onEditRecurring(item)}><span className="activity-icon blue"><ReceiptText size={18} /></span><span className="bill-main"><strong>{item.name}</strong><small>{item.cadence} · next {new Date(item.nextOccurrence).toLocaleDateString()}</small></span><span className="bill-amount"><strong>{item.expectedAmountCents === null ? "Variable" : money(item.expectedAmountCents, data.household.currency)}</strong><small>{item.active ? "active" : "paused"}</small></span></button>)}{!data.recurring.length && <p className="empty-copy">No recurring schedules yet.</p>}</div></section></div>; }
+function Balances({ data, user, onPayment }: { data: HouseholdData; user: User; onPayment: () => void }) { return <div className="balances-layout"><section className="wide-card"><div className="section-heading"><div><h3>Household balances</h3><p>Payments reduce these balances without altering original bills.</p></div></div><div className="balance-lines">{data.balances.map((item) => <div key={`${item.payerUserId}:${item.recipientUserId}`}><div className="avatar-pair large"><Avatar name={item.payerName ?? ""} /><Avatar name={item.recipientName ?? ""} /></div><span><strong>{item.payerUserId === user.id ? `You owe ${item.recipientName}` : item.recipientUserId === user.id ? `${item.payerName} owes you` : `${item.payerName} owes ${item.recipientName}`}</strong><small>Outstanding household balance</small></span><strong>{money(item.amountCents, data.household.currency)}</strong><button className="secondary-button" onClick={onPayment}>Record</button></div>)}{!data.balances.length && <p className="empty-copy">Everyone is settled up.</p>}</div></section></div>; }
+function Activity({ data }: { data: HouseholdData }) { const items = [...data.bills.map((bill) => ({ id: bill.id, when: bill.createdAt, title: `${bill.name} added`, detail: money(bill.amountCents, data.household.currency), kind: "bill" })), ...data.payments.map((payment) => ({ id: payment.id, when: payment.paidAt, title: "Payment recorded", detail: money(payment.amountCents, data.household.currency), kind: "payment" }))].sort((a, b) => +new Date(b.when) - +new Date(a.when)); return <section className="wide-card activity-view"><div className="timeline">{items.map((item) => <div className="timeline-group" key={`${item.kind}:${item.id}`}><div className="timeline-item"><span className={`activity-icon ${item.kind === "bill" ? "coral" : "mint"}`}>{item.kind === "bill" ? <ReceiptText size={18} /> : <CreditCard size={18} />}</span><span><strong>{item.title}</strong><small>{item.detail}</small></span><time>{new Date(item.when).toLocaleDateString()}</time></div></div>)}{!items.length && <p className="empty-copy">Activity will appear here as bills and payments are recorded.</p>}</div></section>; }
+
+function Modal({ title, subtitle, close, children }: { title: string; subtitle: string; close: () => void; children: React.ReactNode }) { return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}><section className="modal" role="dialog" aria-modal="true"><div className="modal-header"><div><h2>{title}</h2><p>{subtitle}</p></div><button className="icon-button" onClick={close}><X size={20} /></button></div><div className="modal-body">{children}</div></section></div>; }
+
+function BillModal({ data, initial, close, save }: { data: HouseholdData; initial?: BillDetailData; close: () => void; save: (body: unknown) => Promise<void> }) {
+  const initialContributions = Object.fromEntries((initial?.contributions ?? []).map((item) => [item.userId, (item.amountCents / 100).toFixed(2)]));
+  const initialAllocations = Object.fromEntries((initial?.allocations ?? []).map((item) => [item.userId, initial?.bill.allocationMethod === "percentage" ? String((item.percentageBasisPoints ?? 0) / 100) : (item.amountCents / 100).toFixed(2)]));
+  const [name, setName] = useState(initial?.bill.name ?? ""); const [amount, setAmount] = useState(initial ? (initial.bill.amountCents / 100).toFixed(2) : ""); const [estimated, setEstimated] = useState(initial?.bill.amountState === "estimated"); const [method, setMethod] = useState<"equal" | "percentage" | "fixed">((initial?.bill.allocationMethod as "equal" | "percentage" | "fixed") ?? "equal"); const [contributionValues, setContributionValues] = useState<Record<string, string>>(initialContributions); const [allocationValues, setAllocationValues] = useState<Record<string, string>>(initialAllocations); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  async function submit(event: React.FormEvent) {
+    event.preventDefault(); const amountCents = Math.round(Number(amount) * 100); if (!amountCents) return;
+    const contributions = data.members.map((member) => ({ userId: member.id, amountCents: Math.round(Number(contributionValues[member.id] || 0) * 100) })).filter((item) => item.amountCents > 0);
+    let allocations: Array<{ userId: string; amountCents: number; percentageBasisPoints?: number }>;
+    if (method === "equal") { const base = Math.floor(amountCents / data.members.length); let remainder = amountCents - base * data.members.length; allocations = data.members.map((member) => ({ userId: member.id, amountCents: base + (remainder-- > 0 ? 1 : 0) })); }
+    else if (method === "fixed") allocations = data.members.map((member) => ({ userId: member.id, amountCents: Math.round(Number(allocationValues[member.id] || 0) * 100) })).filter((item) => item.amountCents > 0);
+    else { const basis = data.members.map((member) => ({ userId: member.id, percentageBasisPoints: Math.round(Number(allocationValues[member.id] || 0) * 100) })); let allocated = 0; allocations = basis.map((item, index) => { const amountForMember = index === basis.length - 1 ? amountCents - allocated : Math.floor(amountCents * item.percentageBasisPoints / 10_000); allocated += amountForMember; return { ...item, amountCents: amountForMember }; }).filter((item) => item.amountCents > 0 || item.percentageBasisPoints > 0); }
+    setBusy(true); setError(""); try { await save({ name, amountCents, periodLabel: initial?.bill.periodLabel ?? new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }), dueDate: initial?.bill.dueDate ?? null, amountState: estimated ? "estimated" : "final", allocationMethod: method, contributions, allocations, ...(initial ? { revision: initial.bill.revision } : {}) }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save bill"); setBusy(false); }
+  }
+  const contributionTotal = data.members.reduce((sum, member) => sum + Number(contributionValues[member.id] || 0), 0);
+  const allocationTotal = data.members.reduce((sum, member) => sum + Number(allocationValues[member.id] || 0), 0);
+  return <Modal title={initial ? "Edit bill" : "Add a bill"} subtitle={data.household.name} close={close}><form onSubmit={submit}><div className="form-grid"><label className="full">Bill name<input value={name} onChange={(e) => setName(e.target.value)} required autoFocus /></label><label>Amount ({data.household.currency})<input type="number" min="0.01" max="1000000000" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required /></label><label className="toggle-row"><span><strong>Estimated amount</strong><small>Finalize it later with a revision.</small></span><input type="checkbox" checked={estimated} onChange={(e) => setEstimated(e.target.checked)} /></label><fieldset className="full"><legend>Who paid the external bill?</legend><div className="money-rows">{data.members.map((member) => <label key={member.id}><span>{member.displayName}</span><input type="number" min="0" step="0.01" placeholder="0.00" value={contributionValues[member.id] ?? ""} onChange={(e) => setContributionValues({ ...contributionValues, [member.id]: e.target.value })} /></label>)}</div><small className={Math.abs(contributionTotal - Number(amount || 0)) < .001 ? "valid-total" : "invalid-total"}>Contributions: {money(Math.round(contributionTotal * 100), data.household.currency)} of {money(Math.round(Number(amount || 0) * 100), data.household.currency)}</small></fieldset><fieldset className="full"><legend>How is responsibility allocated?</legend><div className="segmented">{(["equal", "percentage", "fixed"] as const).map((item) => <button type="button" key={item} className={method === item ? "selected" : ""} onClick={() => setMethod(item)}>{item === "percentage" ? "Percent" : item[0].toUpperCase() + item.slice(1)}</button>)}</div>{method !== "equal" && <div className="money-rows">{data.members.map((member) => <label key={member.id}><span>{member.displayName}</span><input type="number" min="0" step=".01" placeholder="0" value={allocationValues[member.id] ?? ""} onChange={(e) => setAllocationValues({ ...allocationValues, [member.id]: e.target.value })} /><em>{method === "percentage" ? "%" : data.household.currency}</em></label>)}</div>}<small className={method === "equal" || Math.abs(allocationTotal - (method === "percentage" ? 100 : Number(amount || 0))) < .001 ? "valid-total" : "invalid-total"}>{method === "equal" ? `Split equally across ${data.members.length} members` : method === "percentage" ? `${allocationTotal.toFixed(2)}% of 100%` : `${money(Math.round(allocationTotal * 100), data.household.currency)} allocated`}</small></fieldset></div>{error && <p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" disabled={busy || !name || !amount}>{busy ? "Saving…" : initial ? "Save changes" : "Add bill"}</button></div></form></Modal>;
 }
 
-function tabSubtitle(tab: Tab) {
-  if (tab === "bills") return "Current, historical, and recurring household expenses.";
-  if (tab === "balances") return "Every open person-to-person obligation, clearly explained.";
-  return "A chronological, auditable record of money moving through the Household.";
+function PaymentModal({ data, specific, close, save }: { data: HouseholdData; specific: (Balance & { billId: string }) | null; close: () => void; save: (body: unknown) => Promise<void> }) {
+  const choices = specific ? [specific] : data.balances; const [index, setIndex] = useState(0); const [amount, setAmount] = useState(""); const [note, setNote] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const balance = choices[index];
+  async function submit(event: React.FormEvent) { event.preventDefault(); if (!balance) return; setBusy(true); setError(""); try { await save({ billId: specific?.billId ?? null, payerUserId: balance.payerUserId, recipientUserId: balance.recipientUserId, amountCents: Math.round(Number(amount) * 100), note, paidAt: new Date().toISOString() }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to record payment"); setBusy(false); } }
+  return <Modal title="Record a payment" subtitle={specific ? "Apply this payment to one bill" : "Reduce the general running balance"} close={close}>{balance ? <form onSubmit={submit}><div className="form-grid"><label className="full">Balance<select value={index} disabled={Boolean(specific)} onChange={(e) => { setIndex(Number(e.target.value)); setAmount(""); }}>{choices.map((item, itemIndex) => <option key={`${item.payerUserId}:${item.recipientUserId}`} value={itemIndex}>{item.payerName} → {item.recipientName} · {money(item.amountCents, data.household.currency)}</option>)}</select></label><label className="full">Amount<input type="number" min="0.01" max={(balance.amountCents / 100).toFixed(2)} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required /></label><label className="full">Note (optional)<input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} /></label></div>{error && <p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" disabled={busy || !amount}>{busy ? "Recording…" : "Record payment"}</button></div></form> : <p>There are no open balances to pay.</p>}</Modal>;
 }
 
-function Overview({ onBill, onPayment, onDetail, onNavigate }: { onBill: () => void; onPayment: () => void; onDetail: () => void; onNavigate: (tab: Tab) => void }) {
-  return (
-    <div className="dashboard-grid">
-      <section className="summary-card">
-        <div className="summary-top"><span className="summary-icon"><WalletCards size={21} /></span><span>Your overall position</span><button aria-label="Balance details"><MoreHorizontal size={18} /></button></div>
-        <p>You owe</p><h2>$110.00</h2><span className="delta"><ArrowDownLeft size={14} /> $75 lower than last month</span>
-        <div className="summary-divider" />
-        <div className="mini-balance"><div className="avatar-pair"><Avatar name="Alex" small /><Avatar name="Kiran" small /></div><span><small>You owe Kiran</small><strong>$140.00</strong></span><ChevronRight size={18} /></div>
-        <div className="mini-balance"><div className="avatar-pair"><Avatar name="Sam" small /><Avatar name="Alex" small /></div><span><small>Sam owes you</small><strong className="positive">$75.00</strong></span><ChevronRight size={18} /></div>
-        <div className="mini-balance"><div className="avatar-pair"><Avatar name="Alex" small /><Avatar name="Jordan" small /></div><span><small>You owe Jordan</small><strong>$45.00</strong></span><ChevronRight size={18} /></div>
-        <button className="text-button" onClick={() => onNavigate("balances")}>See all balances <ArrowRight size={15} /></button>
-      </section>
+function BillDetailModal({ detail, userId, currency, close, edit, remove, record }: { detail: BillDetailData; userId: string; currency: string; close: () => void; edit: () => void; remove: () => Promise<void>; record: (item: BillDetailData["obligations"][number]) => void }) { return <Modal title={detail.bill.name} subtitle={`${detail.bill.periodLabel} · ${detail.bill.amountState} · revision ${detail.bill.revision}`} close={close}><p className="detail-total">{money(detail.bill.amountCents, currency)}</p><div className="detail-section"><h3>Paid to the external recipient</h3>{detail.contributions.map((item) => <div className="contribution" key={item.id}><Avatar name={item.displayName} /><span><strong>{item.displayName}</strong><small>{new Date(item.paidAt).toLocaleDateString()}</small></span><strong>{money(item.amountCents, currency)}</strong></div>)}</div><div className="detail-section"><h3>{detail.bill.allocationMethod} allocation</h3>{detail.allocations.map((item) => <div className="contribution" key={item.id}><Avatar name={item.displayName} /><span><strong>{item.displayName}</strong><small>{item.percentageBasisPoints === null ? "Responsibility" : `${item.percentageBasisPoints / 100}%`}</small></span><strong>{money(item.amountCents, currency)}</strong></div>)}</div><div className="detail-section"><h3>Resulting obligations</h3>{detail.obligations.map((item) => <div className="obligation" key={item.id}><div className="avatar-pair"><Avatar name={item.debtorName} /><Avatar name={item.creditorName} /></div><span><strong>{item.debtorName} owes {item.creditorName}</strong><small>{money(item.paidAmountCents, currency)} repaid of {money(item.originalAmountCents, currency)}</small></span><strong>{money(item.outstandingAmountCents, currency)}</strong>{item.outstandingAmountCents > 0 && (item.debtorUserId === userId || item.creditorUserId === userId) && <button onClick={() => record(item)}>Record</button>}</div>)}</div><div className="detail-section audit"><h3>Bill history</h3>{detail.history.map((item) => <div key={item.id}><span className="history-dot" /><span><strong>{item.changeType}</strong><small>{item.changedBy} · {new Date(item.changedAt).toLocaleString()}</small></span></div>)}</div><div className="modal-actions"><button className="secondary-button danger-button" onClick={remove}>Remove</button><button className="secondary-button" onClick={edit}>Edit terms</button><button className="primary-button" onClick={close}>Close</button></div></Modal>; }
 
-      <section className="card attention-card">
-        <div className="section-heading"><div><p className="eyebrow">NEEDS ATTENTION</p><h3>Two things to tidy up</h3></div><span className="count-badge">2</span></div>
-        <button className="attention-item" onClick={onDetail}><span className="activity-icon yellow"><Sparkles size={18} /></span><span><strong>Electricity needs a final amount</strong><small>$128.00 estimate · due Jul 20</small></span><span className="action-chip">Finalize</span></button>
-        <button className="attention-item"><span className="activity-icon coral"><Clock3 size={18} /></span><span><strong>July rent is partly unsettled</strong><small>$185.00 remains between members</small></span><ChevronRight size={18} /></button>
-      </section>
-
-      <section className="card recent-card">
-        <div className="section-heading"><div><p className="eyebrow">RECENT BILLS</p><h3>This month at a glance</h3></div><button className="text-button" onClick={() => onNavigate("bills")}>View all</button></div>
-        <div className="bill-list">
-          {bills.slice(0, 3).map((bill) => <BillRow key={bill.name} bill={bill} onClick={onDetail} />)}
-        </div>
-      </section>
-
-      <section className="card upcoming-card">
-        <div className="section-heading"><div><p className="eyebrow">COMING UP</p><h3>Recurring bills</h3></div><Repeat2 size={19} /></div>
-        <div className="calendar-item"><span className="date-tile"><b>18</b><small>JUL</small></span><span><strong>Internet</strong><small>Expected around $92</small></span><em>Monthly</em></div>
-        <div className="calendar-item"><span className="date-tile"><b>01</b><small>AUG</small></span><span><strong>Rent</strong><small>$2,400 · split equally</small></span><em>Monthly</em></div>
-        <a href="/onboarding" className="text-button">Manage recurring bills <ArrowRight size={15} /></a>
-      </section>
-
-      <section className="quick-card">
-        <div><span className="quick-icon"><CircleDollarSign size={22} /></span><span><strong>Keep the ledger current</strong><small>Add an expense or settle up in seconds.</small></span></div>
-        <div><button className="quick-action" onClick={onBill}><Plus size={18} /><span><strong>Add a bill</strong><small>Split an expense</small></span></button><button className="quick-action" onClick={onPayment}><CreditCard size={18} /><span><strong>Record payment</strong><small>Settle a balance</small></span></button></div>
-      </section>
-    </div>
-  );
+function RecurringModal({ data, initial, close, save }: { data: HouseholdData; initial?: Recurring; close: () => void; save: (body: unknown) => Promise<void> }) {
+  const [name, setName] = useState(initial?.name ?? ""); const [amount, setAmount] = useState(initial?.expectedAmountCents ? (initial.expectedAmountCents / 100).toFixed(2) : ""); const [payer, setPayer] = useState(initial?.templateConfig.contributions[0]?.userId ?? data.members[0]?.id ?? ""); const [cadence, setCadence] = useState<Recurring["cadence"]>(initial?.cadence ?? "monthly"); const [nextDate, setNextDate] = useState(initial ? new Date(initial.nextOccurrence).toISOString().slice(0, 10) : ""); const [active, setActive] = useState(initial?.active ?? true); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  async function submit(event: React.FormEvent) { event.preventDefault(); const amountCents = Math.round(Number(amount) * 100); let contributions: Recurring["templateConfig"]["contributions"]; let allocations: Recurring["templateConfig"]["allocations"]; let allocationMethod: Recurring["allocationMethod"]; if (initial) { contributions = initial.templateConfig.contributions; allocations = initial.templateConfig.allocations; allocationMethod = initial.allocationMethod; if (initial.expectedAmountCents !== amountCents) { const base = Math.floor(amountCents / data.members.length); let remainder = amountCents - base * data.members.length; contributions = [{ userId: payer, amountCents }]; allocations = data.members.map((member) => ({ userId: member.id, amountCents: base + (remainder-- > 0 ? 1 : 0) })); allocationMethod = "equal"; } } else { const base = Math.floor(amountCents / data.members.length); let remainder = amountCents - base * data.members.length; contributions = [{ userId: payer, amountCents }]; allocations = data.members.map((member) => ({ userId: member.id, amountCents: base + (remainder-- > 0 ? 1 : 0) })); allocationMethod = "equal"; } setBusy(true); setError(""); try { await save({ name, expectedAmountCents: amountCents, cadence, nextOccurrence: new Date(`${nextDate}T12:00:00Z`).toISOString(), allocationMethod, contributions, allocations, active }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save schedule"); setBusy(false); } }
+  return <Modal title={initial ? "Edit future schedule" : "Add recurring schedule"} subtitle={initial ? "Historical bill instances will not change" : data.household.name} close={close}><form onSubmit={submit}><div className="form-grid"><label className="full">Bill name<input value={name} onChange={(e) => setName(e.target.value)} required autoFocus /></label><label>Expected amount ({data.household.currency})<input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required /></label><label>Paid externally by<select value={payer} disabled={Boolean(initial)} onChange={(e) => setPayer(e.target.value)}>{data.members.map((member) => <option key={member.id} value={member.id}>{member.displayName}</option>)}</select></label><label>Cadence<select value={cadence} onChange={(e) => setCadence(e.target.value as Recurring["cadence"])}><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select></label><label>Next occurrence<input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} required /></label>{initial && <label className="toggle-row"><span><strong>Schedule active</strong><small>Pause future generation without changing history.</small></span><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /></label>}</div>{error && <p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" disabled={busy || !name || !amount || !payer || !nextDate}>{busy ? "Saving…" : initial ? "Save future schedule" : "Create schedule"}</button></div></form></Modal>;
 }
 
-function BillRow({ bill, onClick }: { bill: (typeof bills)[number]; onClick: () => void }) {
-  const Icon = bill.icon;
-  return <button className="bill-row" onClick={onClick}><span className={`activity-icon ${bill.tone}`}><Icon size={18} /></span><span className="bill-main"><strong>{bill.name}</strong><small>{bill.meta}</small></span><span className="bill-amount"><strong>{bill.amount}</strong><small className={bill.status === "Settled" ? "settled" : ""}>{bill.status}</small></span><ChevronRight size={17} /></button>;
-}
+function SettingsModal({ session, theme, preferences, pushAvailable, chooseTheme, updatePreferences, enablePush, changePassword, close, logout }: { session: SessionData; theme: Theme; preferences: NotificationPrefs; pushAvailable: boolean; chooseTheme: (theme: Theme) => Promise<void>; updatePreferences: (next: NotificationPrefs) => Promise<void>; enablePush: () => Promise<void>; changePassword: (current: string, next: string) => Promise<void>; close: () => void; logout: () => Promise<void> }) { const [currentPassword, setCurrentPassword] = useState(""); const [newPassword, setNewPassword] = useState(""); const [error, setError] = useState(""); async function toggle(key: keyof NotificationPrefs) { const next = { ...preferences, [key]: !preferences[key] }; try { await updatePreferences(next); } catch (cause) { setError(cause instanceof Error ? cause.message : "Preferences could not be saved"); } } async function passwordSubmit(event: React.FormEvent) { event.preventDefault(); setError(""); try { await changePassword(currentPassword, newPassword); } catch (cause) { setError(cause instanceof Error ? cause.message : "Password could not be changed"); } } async function push() { setError(""); try { await enablePush(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Push could not be enabled"); } } return <Modal title="User settings" subtitle={`Preferences for ${session.user.displayName}`} close={close}><div className="settings-profile"><Avatar name={session.user.displayName} /><span><strong>{session.user.displayName}</strong><small>{session.user.email}</small></span><span className="status-pill done">Active</span></div><section className="preference-section"><div><h3>Appearance</h3><p>Your choice is saved to your account. Dark mode is the default.</p></div><div className="theme-options"><button className={theme === "dark" ? "selected" : ""} onClick={() => chooseTheme("dark")}><Moon size={19} /><span><strong>Dark</strong><small>Default</small></span>{theme === "dark" && <Check size={16} />}</button><button className={theme === "light" ? "selected" : ""} onClick={() => chooseTheme("light")}><Sun size={19} /><span><strong>Light</strong><small>Bright surfaces</small></span>{theme === "light" && <Check size={16} />}</button></div></section><section className="preference-section"><div><h3>Notifications</h3><p>Choose which Household events create in-app and push notifications.</p></div><div className="notification-preferences"><label><span><strong>Bills and material edits</strong><small>New, edited, finalized, and recurring bills</small></span><input type="checkbox" checked={preferences.billsEnabled} onChange={() => toggle("billsEnabled")} /></label><label><span><strong>Payments involving you</strong><small>Bill-specific and general repayments</small></span><input type="checkbox" checked={preferences.paymentsEnabled} onChange={() => toggle("paymentsEnabled")} /></label><label><span><strong>Balance changes</strong><small>Meaningful changes to what you owe or are owed</small></span><input type="checkbox" checked={preferences.balanceChangesEnabled} onChange={() => toggle("balanceChangesEnabled")} /></label></div><button className="secondary-button push-button" disabled={!pushAvailable} onClick={push}>{pushAvailable ? "Enable push on this device" : "Web Push is not configured"}</button></section><section className="preference-section"><div><h3>Change password</h3><p>Changing your password signs out every device, including this one.</p></div><form className="settings-password" onSubmit={passwordSubmit}><input type="password" autoComplete="current-password" placeholder="Current password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required /><input type="password" autoComplete="new-password" placeholder="New password (12+ characters)" minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required /><button className="secondary-button">Change password</button></form></section>{error && <p className="form-error">{error}</p>}<div className="modal-actions"><button className="secondary-button" onClick={logout}>Sign out</button><button className="primary-button" onClick={close}>Done</button></div></Modal>; }
 
-function BillsView({ onDetail }: { onDetail: () => void }) {
-  return <section className="wide-card">
-    <div className="list-toolbar"><div className="search-box"><Search size={17} /><input aria-label="Search bills" placeholder="Search bills" /></div><div className="filter-pills"><button className="selected">All</button><button>Open</button><button>Estimated</button><button>Settled</button></div><button className="secondary-button"><CalendarDays size={16} /> Jul 2026</button></div>
-    <div className="month-total"><span><small>JULY SPENDING</small><strong>$2,640.20</strong></span><span><small>YOUR SHARE</small><strong>$660.05</strong></span><span><small>PAID TO VENDORS</small><strong>$2,548.20</strong></span><span><small>UNSETTLED BETWEEN MEMBERS</small><strong className="warn">$185.00</strong></span></div>
-    <div className="bill-table"><div className="table-head"><span>Bill</span><span>Paid externally by</span><span>Total</span><span>Status</span><span /></div>{bills.map((bill, index) => <button key={bill.name} onClick={onDetail}><span className="table-bill"><span className={`activity-icon ${bill.tone}`}><bill.icon size={18} /></span><span><strong>{bill.name}</strong><small>{bill.meta}</small></span></span><span className="payer-stack"><Avatar name={index % 2 ? "Alex" : "Kiran"} small />{index === 0 && <Avatar name="Jordan" small />}</span><strong>{bill.amount}</strong><span className={`status-pill ${bill.status === "Settled" ? "done" : "open"}`}>{bill.status}</span><ChevronRight size={17} /></button>)}</div>
-  </section>;
-}
-
-function BalancesView({ onPayment }: { onPayment: () => void }) {
-  return <div className="balances-layout"><section className="wide-card balance-hero"><div><p className="eyebrow">YOUR NET POSITION</p><h2>You owe <span>$110.00</span></h2><p>That’s the total after accounting for what others owe you.</p></div><button className="primary-button" onClick={onPayment}><CreditCard size={17} /> Settle up</button></section><section className="wide-card"><div className="section-heading"><div><h3>Your balances</h3><p>These obligations stay itemized even when we show a net total.</p></div></div><div className="balance-lines"><BalanceLine from="Alex" to="Kiran" text="You owe Kiran" amount="$140.00" detail="July rent $100 · Electricity $40" onPay={onPayment} /><BalanceLine from="Sam" to="Alex" text="Sam owes you" amount="$75.00" detail="Groceries $35 · General balance $40" positive onPay={onPayment} /><BalanceLine from="Alex" to="Jordan" text="You owe Jordan" amount="$45.00" detail="July rent $45" onPay={onPayment} /></div></section><section className="wide-card all-balances"><div className="section-heading"><div><h3>Everyone in Maple House</h3><p>Pair-by-pair balances across the Household.</p></div></div><div className="relationship-grid"><Relationship from="Kiran" to="Jordan" amount="$20" /><Relationship from="Sam" to="Kiran" amount="$75" /><Relationship from="Jordan" to="Sam" amount="$32" /></div></section></div>;
-}
-
-function BalanceLine({ from, to, text, amount, detail, positive, onPay }: { from: keyof typeof people; to: keyof typeof people; text: string; amount: string; detail: string; positive?: boolean; onPay: () => void }) {
-  return <div><div className="avatar-pair large"><Avatar name={from} /><Avatar name={to} /></div><span><strong>{text}</strong><small>{detail}</small></span><strong className={positive ? "positive" : ""}>{amount}</strong><button className="secondary-button" onClick={onPay}>{positive ? "Remind" : "Pay"}</button></div>;
-}
-
-function Relationship({ from, to, amount }: { from: keyof typeof people; to: keyof typeof people; amount: string }) {
-  return <div><div className="avatar-pair"><Avatar name={from} small /><Avatar name={to} small /></div><span><strong>{from} owes {to}</strong><small>2 open obligations</small></span><strong>{amount}</strong></div>;
-}
-
-function ActivityView() {
-  const activity = [
-    { day: "TODAY", icon: CreditCard, tone: "mint", title: "Sam paid Alex $75.00", sub: "General balance payment · recorded by Sam", time: "9:42 AM" },
-    { day: "TODAY", icon: ReceiptText, tone: "coral", title: "Kiran added July rent", sub: "$2,400.00 · split equally among 4 members", time: "8:18 AM" },
-    { day: "YESTERDAY", icon: Sparkles, tone: "yellow", title: "Electricity amount estimated", sub: "$128.00 · created by Alex", time: "6:05 PM" },
-    { day: "JUL 10", icon: Repeat2, tone: "blue", title: "Internet bill generated", sub: "Created from the monthly Internet schedule", time: "12:01 AM" },
-    { day: "JUL 8", icon: CreditCard, tone: "mint", title: "Alex paid Kiran $40.00", sub: "Partial payment toward June rent · $60 remains", time: "4:22 PM" },
-  ];
-  let lastDay = "";
-  return <section className="wide-card activity-view"><div className="list-toolbar"><div className="filter-pills"><button className="selected">Everything</button><button>Bills</button><button>Payments</button><button>Changes</button></div><button className="secondary-button"><CalendarDays size={16} /> Date range</button></div><div className="timeline">{activity.map((item, i) => { const Icon = item.icon; const showDay = lastDay !== item.day; lastDay = item.day; return <div className="timeline-group" key={i}>{showDay && <p className="timeline-day">{item.day}</p>}<button className="timeline-item"><span className={`activity-icon ${item.tone}`}><Icon size={18} /></span><span><strong>{item.title}</strong><small>{item.sub}</small></span><time>{item.time}</time><ChevronRight size={17} /></button></div>; })}</div></section>;
-}
-
-function Modal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-header"><div><h2 id="modal-title">{title}</h2><p>{subtitle}</p></div><button className="icon-button" aria-label="Close" onClick={onClose}><X size={20} /></button></div><div className="modal-body">{children}</div></section></div>;
-}
-
-function BillDetail({ onClose, onPayment }: { onClose: () => void; onPayment: () => void }) {
-  return <div className="drawer-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><section className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="bill-title"><div className="drawer-header"><button className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button><button className="secondary-button"><MoreHorizontal size={17} /> Actions</button></div><div className="drawer-body"><span className="bill-detail-icon"><Home size={24} /></span><p className="eyebrow">JULY 2026 · FINAL</p><h2 id="bill-title">July rent</h2><p className="detail-total">$2,400.00</p><span className="status-pill open">$185.00 unsettled</span><div className="detail-section"><h3>Paid to the landlord</h3><div className="contribution"><Avatar name="Kiran" small /><span><strong>Kiran paid</strong><small>July 1</small></span><strong>$2,000.00</strong></div><div className="contribution"><Avatar name="Jordan" small /><span><strong>Jordan paid</strong><small>July 1</small></span><strong>$400.00</strong></div><p className="validated"><Check size={15} /> Contributions equal the $2,400.00 bill total</p></div><div className="detail-section"><h3>Split equally</h3><div className="allocation-bar"><span /><span /><span /><span /></div><div className="allocation-grid">{(["Alex", "Kiran", "Sam", "Jordan"] as const).map((name) => <div key={name}><Avatar name={name} small /><span>{name}</span><strong>$600</strong></div>)}</div></div><div className="detail-section"><div className="section-heading"><div><h3>Resulting balances</h3><p>After vendor payments and repayments</p></div></div><div className="obligation"><div className="avatar-pair"><Avatar name="Alex" small /><Avatar name="Kiran" small /></div><span><strong>Alex owes Kiran</strong><small>Paid $460 of $600</small></span><strong>$140.00</strong><button onClick={onPayment}>Pay</button></div><div className="obligation"><div className="avatar-pair"><Avatar name="Sam" small /><Avatar name="Kiran" small /></div><span><strong>Sam owes Kiran</strong><small>Paid $525 of $600</small></span><strong>$75.00</strong><button onClick={onPayment}>Pay</button></div></div><div className="detail-section audit"><h3>Bill history</h3><div><span className="history-dot" /><span><strong>Amount finalized at $2,400</strong><small>Kiran · Jul 1, 8:18 AM</small></span></div><div><span className="history-dot" /><span><strong>Bill created from Rent schedule</strong><small>System · Jul 1, 12:01 AM</small></span></div></div></div><div className="drawer-actions"><button className="secondary-button" onClick={onClose}>Close</button><button className="primary-button" onClick={onPayment}>Record payment</button></div></section></div>;
-}
+function EmptyAccount({ user, onLogout }: { user: User; onLogout: () => Promise<void> }) { return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><span className="brand-mark"><span className="roof" /><span className="door" /></span><span>FairShare</span></div><span className="setup-icon"><WalletCards size={24} /></span><h1>No Household assigned</h1><p>Hello {user.displayName}. An administrator needs to add your account to a Household before financial data is available.</p><button className="secondary-button" onClick={onLogout}>Sign out</button></section></main>; }

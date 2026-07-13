@@ -11,7 +11,10 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#176b5b",
     orientation: "portrait-primary",
     categories: ["finance", "utilities", "productivity"],
-    icons: [{ src: "/favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }],
+    icons: [
+      { src: "/favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+      { src: "/favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
+    ],
     shortcuts: [
       { name: "Add a bill", short_name: "Add bill", url: "/?action=bill" },
       { name: "Record payment", short_name: "Payment", url: "/?action=payment" },

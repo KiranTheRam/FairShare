@@ -1,6 +1,12 @@
+import { sql } from "drizzle-orm";
+import { getDb } from "@/db";
+import { noStore } from "@/lib/http";
+
 export async function GET() {
-  return Response.json(
-    { status: "ok", service: "fairshare" },
-    { headers: { "Cache-Control": "no-store" } },
-  );
+  try {
+    await getDb().execute(sql`select 1`);
+    return noStore({ status: "ok" });
+  } catch {
+    return noStore({ status: "unhealthy" }, { status: 503 });
+  }
 }

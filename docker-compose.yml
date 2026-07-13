@@ -1,20 +1,44 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fairshare
+      POSTGRES_USER: fairshare
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - fairshare_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fairshare -d fairshare"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
   fairshare:
     image: kirantheram/fairshare:latest
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: fairshare
     restart: unless-stopped
     init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "127.0.0.1:3000:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
-      NEXT_TELEMETRY_DISABLED: "1"
-      WRANGLER_WRITE_LOGS: "false"
+      DATABASE_URL: postgresql://fairshare:${POSTGRES_PASSWORD}@postgres:5432/fairshare
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN to the public HTTPS origin}
+      FAIRSHARE_SETUP_TOKEN: ${FAIRSHARE_SETUP_TOKEN:?Set a long one-time setup token}
+      CRON_SECRET: ${CRON_SECRET:?Set a long scheduler secret}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
     read_only: true
     tmpfs:
       - /tmp:size=64M,mode=1777
@@ -27,4 +51,22 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
+      start_period: 30s
+
+  scheduler:
+    image: curlimages/curl:8.14.1
+    restart: unless-stopped
+    depends_on:
+      fairshare:
+        condition: service_healthy
+    environment:
+      CRON_SECRET: ${CRON_SECRET:?Set a long scheduler secret}
+    command: ["sh", "-c", "while true; do curl --fail --silent --show-error --retry 3 -X POST -H \"Authorization: Bearer $$CRON_SECRET\" http://fairshare:3000/api/cron/recurring; sleep 3600; done"]
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  fairshare_postgres:

@@ -1,41 +1,64 @@
 # Security
 
-## Current security status
+## Security model
 
-FairShare is currently an interactive product prototype. The bundled Household data is illustrative and client-side actions do not write financial records to a production backend. **Do not use this release to store real household financial data or expose private account information.**
+FairShare is designed for direct self-hosting behind an HTTPS reverse proxy. Authentication, authorization, ledger calculation, and validation are enforced by the server; the browser is never trusted to decide access or balances.
 
-Before production financial use, the application still needs:
+Implemented controls include:
 
-- Server-side account authentication with secure, rotating sessions.
-- Household-scoped authorization on every read and write.
-- A separately authorized administrator role that cannot participate in ledgers.
-- CSRF protection for all state-changing requests.
-- Server-side input validation, rate limiting, login throttling, and audit logging.
-- A durable database implementation with encrypted backups and tested restore procedures.
-- Push-subscription storage and authenticated notification delivery.
-- Dependency scanning and a documented security-update process.
+- Argon2id password hashing with a 64 MiB memory cost and three iterations.
+- Random 256-bit session tokens; only SHA-256 token digests are stored in PostgreSQL.
+- `HttpOnly`, `Secure`, `SameSite=Lax`, host-only cookies with 30-day expiry.
+- A random per-session CSRF token plus exact-origin validation on every mutation.
+- Login throttling by normalized email and client IP.
+- Zod validation, request size limits, integer-cent money values, and server-calculated obligations.
+- Household membership checks on every Household read and write.
+- A separate administrator role that cannot be assigned to a Household ledger.
+- Optimistic bill revision checks to reject stale concurrent updates.
+- Append-only bill change history and security/administration audit logs.
+- Idempotency protection for recurring bill generation.
+- Push subscriptions scoped to their authenticated owner.
+- Private, non-cacheable API responses and no authenticated HTML in the service-worker cache.
+- CSP, clickjacking, MIME-sniffing, referrer, permissions, COOP/CORP, and HSTS headers.
+- Non-root container execution, read-only application filesystem, dropped Linux capabilities, `no-new-privileges`, loopback-only app binding, and an unpublished database port.
+- Locked dependency graph, automated multi-architecture image builds, provenance, and SBOM output.
 
-## Hardening included in this repository
+## Deployment responsibilities
 
-- The container runs as an unprivileged user with dropped Linux capabilities, a read-only filesystem, and `no-new-privileges` in Compose.
-- The service binds to loopback by default so a TLS reverse proxy is required for public access.
-- CSP, clickjacking, MIME-sniffing, referrer, permissions, cross-origin, and HSTS headers are applied at the app/worker boundary.
-- Dynamic HTML is marked private and non-cacheable in the Cloudflare worker.
-- The service exposes a minimal health endpoint and disables framework identification headers.
-- Docker builds use a pinned Node base image and produce provenance/SBOM metadata in CI.
-- Secrets are not committed; local environment files are ignored.
+Production safety still depends on the operator:
 
-## Public deployment baseline
+- Terminate TLS at a maintained reverse proxy and set `APP_ORIGIN` to the exact external HTTPS origin.
+- Do not set `COOKIE_SECURE=false` in production.
+- Do not publish container port 3000 or PostgreSQL directly to the internet.
+- Generate unique high-entropy database, bootstrap, and scheduler secrets; keep `.env` readable only by the service operator.
+- Remove or rotate the bootstrap token after the first administrator is created.
+- Forward a trustworthy client IP header and strip untrusted incoming forwarding headers at the proxy.
+- Pin release image tags, install security updates promptly, and monitor authentication/audit events.
+- Back up PostgreSQL with encryption at rest and regularly test a full restore.
+- Configure host-level firewalling, disk encryption, resource limits, log retention, and intrusion monitoring appropriate to the server.
 
-Place FairShare behind a maintained HTTPS reverse proxy such as Caddy, Traefik, or nginx. Keep port `3000` bound to `127.0.0.1`, terminate TLS at the proxy, enable automated certificate renewal, and add an identity-aware access proxy until application-owned authentication is implemented. Never expose the container port directly to the internet.
+FairShare stores financial coordination records, not bank credentials, and does not move money. Treat its database as sensitive personal information.
 
-Run dependency and image scanning regularly:
+## Remaining considerations
+
+The default Content Security Policy permits inline framework scripts/styles required by the current Next.js output. It still blocks third-party origins, framing, plugins, and unexpected network destinations. Operators with a stricter CSP requirement can add nonce-based rendering at their reverse proxy/application boundary after testing framework upgrades.
+
+Account recovery is intentionally administrator-mediated for a self-hosted installation. An administrator can assign a new password; changing or disabling an account revokes its active sessions. There is no email-based reset flow unless the operator adds a trusted mail service.
+
+## Verification
+
+Before a release or upgrade, run:
 
 ```bash
+npm ci
+npm run lint
+npm test
 npm audit --omit=dev
-docker scout cves kirantheram/fairshare:latest
+docker build -t fairshare:local .
 ```
+
+Scan the published image with your preferred scanner (for example Docker Scout, Trivy, or Grype), and test login, cross-Household isolation, CSRF rejection, backup, and restore in a non-production environment.
 
 ## Reporting a vulnerability
 
-Please report suspected vulnerabilities privately through GitHub's Security tab instead of opening a public issue. Include reproduction steps, affected routes, and the impact you observed.
+Report suspected vulnerabilities privately through the GitHub repository’s Security tab rather than a public issue. Include affected versions, reproduction steps, and impact. Do not include real household data or credentials.

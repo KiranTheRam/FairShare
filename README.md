@@ -1,9 +1,6 @@
 # FairShare
 
-FairShare is a mobile-first Progressive Web App for understanding shared household expenses without turning the home into an accounting department. A Household records bills, who paid the external expense, how responsibility is allocated, and the repayments made between members. FairShare then explains the result in plain language: **“You owe Kiran $40”** or **“Sam owes you $125.”**
-
-> [!IMPORTANT]
-> This repository currently contains an interactive product prototype with illustrative data. It is suitable for evaluation and UI development, but it does **not** yet implement production account authentication, Household authorization, or durable server-side writes. Do not use this release for real financial data. See [Security](#security) and [SECURITY.md](SECURITY.md).
+FairShare is a self-hosted, mobile-first Progressive Web App for shared household expenses. It records who paid a vendor, how the cost is allocated, and repayments between members, then calculates clear person-to-person balances without erasing the underlying audit trail.
 
 ## Screenshots
 
@@ -11,78 +8,83 @@ FairShare is a mobile-first Progressive Web App for understanding shared househo
 
 ![FairShare dark Household dashboard](screenshots/dashboard-dark.png)
 
-### User appearance and notification settings
+### User settings and theme selection
 
 ![FairShare user settings with dark mode selected](screenshots/user-settings-dark-mode.png)
 
-### Mobile dashboard
+### Mobile PWA
 
 <img src="screenshots/mobile-dashboard-dark.png" alt="FairShare mobile dashboard" width="390">
 
-## Features
+## What is included
 
-- Multiple Households with member-focused navigation.
-- Clear person-to-person balances while preserving the underlying obligations.
-- Bills with external contributions separated from member responsibility.
-- Equal, percentage, and fixed-amount allocation interfaces.
-- Partial bill repayments and general balance payments.
-- Estimated bills that can later be finalized.
-- Recurring-bill templates and Household onboarding.
-- Chronological activity and meaningful bill-change history.
-- Separate administrator-management surface.
-- Installable PWA shell with offline fallback and push-notification handlers.
-- Responsive desktop and mobile layouts.
-- Dark mode by default, with a persistent light/dark toggle in user settings.
-- Auditable D1/Drizzle schema for users, Households, membership, bills, contributions, allocations, obligations, payments, history, recurring templates, and notifications.
+- Email/password accounts using Argon2id password hashing.
+- Server-side, revocable sessions in `HttpOnly`, `Secure`, `SameSite=Lax` cookies.
+- One-time first-administrator bootstrap and a separate administrator console.
+- Strict Household-scoped authorization on every financial read and write.
+- Multiple Households and administrator-managed membership.
+- Bills with vendor contributions, equal/percentage/fixed allocations, revisions, and change history.
+- Server-calculated obligations and partial or complete repayments.
+- Recurring bill templates with an idempotent hourly scheduler.
+- In-app notifications and optional standards-based Web Push.
+- Dark mode by default with an account-persisted toggle in user settings.
+- Installable PWA behavior and a responsive desktop/mobile interface.
+- PostgreSQL migrations, audit logs, login throttling, CSRF protection, and validated API inputs.
+- Hardened, non-root container and a complete PostgreSQL Docker Compose stack.
 
-## Quick start with Docker Compose
+## Deploy with Docker Compose
 
-Requirements: Docker Engine with the Compose plugin.
+Requirements: Docker Engine and the Compose plugin.
 
 ```bash
 git clone https://github.com/KiranTheRam/FairShare.git
 cd FairShare
-docker compose up -d
-docker compose ps
+cp .env.example .env
 ```
 
-FairShare is then available at `http://127.0.0.1:3000`. Compose intentionally binds only to loopback. Put an HTTPS reverse proxy in front of it for access from a public domain.
+Generate independent secrets rather than using the example values:
 
-To update:
+```bash
+openssl rand -base64 36  # POSTGRES_PASSWORD
+openssl rand -base64 36  # FAIRSHARE_SETUP_TOKEN
+openssl rand -base64 36  # CRON_SECRET
+```
+
+Edit `.env` and set:
+
+- `APP_ORIGIN` to the exact public HTTPS origin, such as `https://fairshare.example.com` (no trailing slash).
+- `POSTGRES_PASSWORD`, `FAIRSHARE_SETUP_TOKEN`, and `CRON_SECRET` to different random values.
+- Optional VAPID values if Web Push is required. Generate them with `npx web-push generate-vapid-keys`.
+
+Start the stack:
 
 ```bash
 docker compose pull
 docker compose up -d
+docker compose ps
 ```
 
-To build locally instead of pulling the published image:
+The application binds to `127.0.0.1:3000`; PostgreSQL is not published to the host. Put your HTTPS reverse proxy in front of port 3000 and preserve the `Host`, `X-Forwarded-Proto`, and client IP headers.
+
+On the first visit, FairShare displays the secure setup screen. Enter the configured `FAIRSHARE_SETUP_TOKEN`, administrator email, and a strong password. The bootstrap endpoint permanently disables itself as soon as the first account exists.
+
+Database migrations run automatically before the Next.js server accepts traffic. The scheduler service calls the protected recurring-bill endpoint hourly.
+
+### Updating
+
+Back up PostgreSQL first, then pull and restart:
 
 ```bash
-docker compose build --pull
+docker compose exec -T postgres pg_dump -U fairshare -d fairshare -Fc > fairshare-$(date +%F).dump
+docker compose pull
 docker compose up -d
 ```
 
-## Docker image
+Restore into an empty database with `pg_restore`. Test the restore procedure before depending on the data.
 
-The GitHub Actions workflow builds `linux/amd64` and `linux/arm64` images and publishes them to:
+### Reverse proxy example
 
-```text
-kirantheram/fairshare:latest
-kirantheram/fairshare:sha-<commit>
-```
-
-The image runs as an unprivileged user and includes a health check at `/api/health`.
-
-## Public-domain deployment guide
-
-Do not expose container port `3000` directly. Keep the Compose loopback binding and terminate HTTPS at a maintained reverse proxy.
-
-### Example: Caddy on the host
-
-1. Point the domain's DNS record to the server.
-2. Install Caddy using its official package for your operating system.
-3. Start FairShare with `docker compose up -d`.
-4. Add a site block to the Caddy configuration:
+FairShare does not manage DNS, TLS, or your reverse proxy. A minimal Caddy site is:
 
 ```caddyfile
 fairshare.example.com {
@@ -91,64 +93,64 @@ fairshare.example.com {
 }
 ```
 
-5. Reload Caddy and confirm that HTTPS is active.
+TLS is mandatory in production because the session cookie is secure by default. For local non-TLS development only, set `COOKIE_SECURE=false` and use an `http://localhost` `APP_ORIGIN`; never deploy that setting publicly.
 
-Until application-owned login and Household authorization are implemented, place an identity-aware proxy in front of FairShare and restrict access to approved users. Examples include Authelia, Authentik, Cloudflare Access, or an OAuth2 Proxy deployment.
+## Docker image
 
-### Recommended production controls
+Every push to `main` builds multi-architecture images for `linux/amd64` and `linux/arm64` and publishes:
 
-- Enable automatic TLS renewal and redirect HTTP to HTTPS.
-- Permit inbound traffic only on ports `80` and `443`; keep `3000` private.
-- Back up persistent application data once the production database is connected.
-- Pin image versions for controlled upgrades instead of relying on `latest`.
-- Run container and dependency vulnerability scans on every release.
-- Monitor health checks, reverse-proxy errors, and authentication events.
+```text
+kirantheram/fairshare:latest
+kirantheram/fairshare:sha-<commit>
+```
+
+The workflow also publishes provenance and an SBOM. Pin a `sha-...` tag for controlled production releases.
 
 ## Local development
 
-Requirements: Node.js `>=22.13.0`.
+Run PostgreSQL (the Compose database service is convenient), then:
 
 ```bash
 npm ci
+export DATABASE_URL=postgresql://fairshare:password@127.0.0.1:5432/fairshare
+export APP_ORIGIN=http://localhost:3000
+export COOKIE_SECURE=false
+export FAIRSHARE_SETUP_TOKEN=replace-with-at-least-16-characters
+export CRON_SECRET=replace-with-a-long-random-value
+npm run db:migrate
 npm run dev
 ```
 
-Useful checks:
+Quality checks:
 
 ```bash
 npm run lint
 npm test
 npm audit --omit=dev
+docker compose config --quiet
 docker build -t fairshare:local .
 ```
 
-## Architecture
+## Data model
 
-- Next.js-compatible App Router rendered by [Vinext](https://github.com/cloudflare/vinext).
-- React 19 UI and Lucide icon system.
-- Cloudflare Worker-compatible build output for OpenAI Sites.
-- Drizzle schema and D1 migration under `db/` and `drizzle/`.
-- Service worker and web app manifest under `public/` and `app/manifest.ts`.
-- Multi-stage, non-root container build and hardened Compose defaults.
-
-The ledger model keeps these as distinct records rather than storing only a mutable balance:
+FairShare does not store a single mutable balance. It preserves the records that explain it:
 
 ```text
 Bill
  ├─ external contributions (who paid the vendor)
  ├─ allocations (who is responsible)
- ├─ obligations (who owes whom)
- ├─ bill-specific repayments
- └─ financial-term change history
+ ├─ revisioned obligations (who owes whom)
+ ├─ repayments
+ └─ bill-change history
 
-General payments reduce pairwise balances without modifying bill terms.
+Household pair balance = active obligations - recorded repayments
 ```
+
+Administrator accounts cannot be Household members or financial participants. Members only receive data for Households explicitly assigned to them.
 
 ## Security
 
-The current prototype includes a restrictive Content Security Policy, clickjacking and MIME-sniffing protection, referrer and permissions policies, private HTML caching, a non-root container, dropped capabilities, a read-only Compose filesystem, and loopback-only port binding.
-
-Those controls harden the delivery layer; they do not replace application security. Production use still requires server-side authentication, Household-scoped authorization, administrator-role enforcement, CSRF defenses, validated writes, rate limiting, audit logging, durable encrypted storage, and backup/restore testing. Read [SECURITY.md](SECURITY.md) before deploying on a public domain.
+The application includes authentication and authorization, but secure operation still depends on your deployment: HTTPS, protected secrets, timely image updates, database backups, and monitoring are required. See [SECURITY.md](SECURITY.md) for the implemented controls, known operational responsibilities, and vulnerability reporting process.
 
 ## License
 
