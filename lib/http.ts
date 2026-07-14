@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ZodError, type ZodType } from "zod";
+import { z, ZodError, type ZodType } from "zod";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code = "request_error") {
@@ -9,7 +9,7 @@ export class ApiError extends Error {
 
 export function jsonError(error: unknown) {
   if (error instanceof ApiError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
-  if (error instanceof ZodError) return NextResponse.json({ error: "Invalid request", code: "validation_error", details: error.flatten() }, { status: 400 });
+  if (error instanceof ZodError) return NextResponse.json({ error: "Invalid request", code: "validation_error" }, { status: 400 });
   console.error(error);
   return NextResponse.json({ error: "Internal server error", code: "internal_error" }, { status: 500 });
 }
@@ -40,7 +40,15 @@ export async function readJson(request: NextRequest): Promise<unknown> {
 }
 
 export function clientIp(request: NextRequest) {
-  return request.headers.get("x-real-ip") ?? request.headers.get("x-forwarded-for")?.split(",", 1)[0]?.trim() ?? "unknown";
+  // Cloudflare overwrites CF-Connecting-IP at the edge. X-Real-IP is the
+  // single-value fallback expected from the directly connected reverse proxy.
+  // Deliberately do not trust the client-controlled X-Forwarded-For chain.
+  return request.headers.get("cf-connecting-ip")?.trim() ?? request.headers.get("x-real-ip")?.trim() ?? "unknown";
+}
+
+export function requireUuid(value: string, name = "identifier") {
+  if (!z.string().uuid().safeParse(value).success) throw new ApiError(400, `Invalid ${name}`, "invalid_identifier");
+  return value;
 }
 
 export function assertSameOrigin(request: NextRequest) {

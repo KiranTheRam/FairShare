@@ -8,7 +8,7 @@ import { ApiError, parseJson } from "@/lib/http";
 import { outstandingForBillPair, outstandingForPair } from "@/lib/ledger";
 import { areObligationsSettled } from "@/lib/ledger-calculation";
 import { notifyUser } from "@/lib/notifications";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { paymentSchema } from "@/lib/validation";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ householdId: string }> }) {
@@ -18,18 +18,33 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ho
     const household = await requireFinancialAccess(user, householdId);
     const input = await parseJson(request, paymentSchema);
     await validateMembershipIds(householdId, [input.payerUserId, input.recipientUserId]);
-    if (user.id !== input.payerUserId && user.id !== input.recipientUserId) throw new ApiError(403, "Only a person involved in the payment may record it", "payment_not_involved");
-    if (input.billId) {
-      const [bill] = await getDb().select({ id: bills.id, status: bills.status }).from(bills).where(and(eq(bills.id, input.billId), eq(bills.householdId, householdId))).limit(1);
-      if (!bill) throw new ApiError(400, "The selected bill does not belong to this Household", "invalid_bill");
-      if (bill.status !== "open") throw new ApiError(409, "This bill is already settled", "bill_already_settled");
-    }
-    const outstanding = input.billId
-      ? await outstandingForBillPair(householdId, input.billId, input.payerUserId, input.recipientUserId)
-      : await outstandingForPair(householdId, input.payerUserId, input.recipientUserId);
-    if (input.amountCents > outstanding) throw new ApiError(400, `Payment exceeds the outstanding balance of ${(outstanding / 100).toFixed(2)} ${household.currency}`, "payment_exceeds_balance");
-    const payment = await getDb().transaction(async (tx) => {
-      const [created] = await tx.insert(payments).values({ householdId, billId: input.billId ?? null, payerUserId: input.payerUserId, recipientUserId: input.recipientUserId, amountCents: input.amountCents, note: input.note, paidAt: input.paidAt ? new Date(input.paidAt) : new Date(), createdByUserId: user.id }).returning();
+    if (user.id !== input.recipientUserId) throw new ApiError(403, "Only the recipient may confirm a payment", "payment_confirmation_required");
+    const result = await getDb().transaction(async (tx) => {
+      const pair = [input.payerUserId, input.recipientUserId].sort().join(":");
+      const lockKey = `payment:${householdId}:${input.billId ?? "general"}:${pair}`;
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
+      const [prior] = await tx.select().from(payments).where(eq(payments.idempotencyKey, input.idempotencyKey)).limit(1);
+      if (prior) {
+        const sameOperation = prior.householdId === householdId
+          && prior.createdByUserId === user.id
+          && prior.billId === (input.billId ?? null)
+          && prior.payerUserId === input.payerUserId
+          && prior.recipientUserId === input.recipientUserId
+          && prior.amountCents === input.amountCents;
+        if (!sameOperation) throw new ApiError(409, "Idempotency key was already used for another payment", "idempotency_conflict");
+        return { payment: prior, created: false };
+      }
+      if (input.billId) {
+        const [bill] = await tx.select({ id: bills.id, status: bills.status }).from(bills)
+          .where(and(eq(bills.id, input.billId), eq(bills.householdId, householdId))).limit(1).for("update");
+        if (!bill) throw new ApiError(400, "The selected bill does not belong to this Household", "invalid_bill");
+        if (bill.status !== "open") throw new ApiError(409, "This bill is already settled", "bill_already_settled");
+      }
+      const outstanding = input.billId
+        ? await outstandingForBillPair(householdId, input.billId, input.payerUserId, input.recipientUserId)
+        : await outstandingForPair(householdId, input.payerUserId, input.recipientUserId);
+      if (input.amountCents > outstanding) throw new ApiError(400, `Payment exceeds the outstanding balance of ${(outstanding / 100).toFixed(2)} ${household.currency}`, "payment_exceeds_balance");
+      const [created] = await tx.insert(payments).values({ idempotencyKey: input.idempotencyKey, householdId, billId: input.billId ?? null, payerUserId: input.payerUserId, recipientUserId: input.recipientUserId, amountCents: input.amountCents, note: input.note, paidAt: input.paidAt ? new Date(input.paidAt) : new Date(), createdByUserId: user.id }).returning();
       if (input.billId) {
         const [activeObligations, billPayments] = await Promise.all([
           tx.select({ debtorUserId: obligations.debtorUserId, creditorUserId: obligations.creditorUserId, amountCents: obligations.originalAmountCents }).from(obligations).where(and(eq(obligations.billId, input.billId), eq(obligations.active, true))),
@@ -41,11 +56,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ho
           await tx.insert(billChangeHistory).values({ billId: input.billId, changedByUserId: user.id, changeType: "settled", afterValue: { status: "settled", paymentId: created.id } });
         }
       }
-      return created;
+      return { payment: created, created: true };
     });
+    const payment = result.payment;
+    if (!result.created) return { payment, replayed: true };
     const notifyUserId = user.id === input.payerUserId ? input.recipientUserId : input.payerUserId;
     await notifyUser({ householdId, userId: notifyUserId, type: "payment", title: "Payment recorded", body: `${input.amountCents / 100} ${household.currency} was recorded toward your balance.`, targetPath: "/" });
     await writeAudit(request, user, "payment.created", "payment", payment.id, householdId, { amountCents: payment.amountCents });
-    return { payment };
+    return { payment, replayed: false };
   }, 201);
 }

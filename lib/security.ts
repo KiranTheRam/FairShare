@@ -20,6 +20,13 @@ export async function verifyPassword(passwordHash: string, password: string) {
   }
 }
 
+let dummyPasswordHash: Promise<string> | undefined;
+
+export function getDummyPasswordHash() {
+  dummyPasswordHash ??= hashPassword(randomToken());
+  return dummyPasswordHash;
+}
+
 export function randomToken(bytes = 32) {
   return randomBytes(bytes).toString("base64url");
 }
