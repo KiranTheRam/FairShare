@@ -1,5 +1,8 @@
 import { relations } from "drizzle-orm";
-import { bigint, boolean, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, customType, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import type { BillCategory } from "@/lib/categories";
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType() { return "bytea"; } });
 
 export const userRole = pgEnum("user_role", ["member", "administrator"]);
 export const userStatus = pgEnum("user_status", ["active", "disabled"]);
@@ -63,6 +66,7 @@ export const recurringBillTemplates = pgTable("recurring_bill_templates", {
   id: uuid("id").primaryKey().defaultRandom(),
   householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  category: text("category").$type<BillCategory>().notNull().default("other"),
   expectedAmountCents: bigint("expected_amount_cents", { mode: "number" }),
   cadence: recurrenceCadence("cadence").notNull(),
   nextOccurrence: timestamp("next_occurrence", { withTimezone: true }).notNull(),
@@ -78,6 +82,7 @@ export const bills = pgTable("bills", {
   householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
   recurringTemplateId: uuid("recurring_template_id").references(() => recurringBillTemplates.id, { onDelete: "set null" }),
   name: text("name").notNull(),
+  category: text("category").$type<BillCategory>().notNull().default("other"),
   amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
   periodLabel: text("period_label").notNull(),
   dueDate: timestamp("due_date", { withTimezone: true }),
@@ -134,6 +139,37 @@ export const payments = pgTable("payments", {
   createdByUserId: uuid("created_by_user_id").notNull().references(() => users.id),
   ...createdUpdated,
 }, (table) => [uniqueIndex("payments_idempotency_key_unique").on(table.idempotencyKey), index("payments_household_date_idx").on(table.householdId, table.paidAt), index("payments_bill_idx").on(table.billId)]);
+
+export const billAttachments = pgTable("bill_attachments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  billId: uuid("bill_id").notNull().references(() => bills.id, { onDelete: "cascade" }),
+  uploadedByUserId: uuid("uploaded_by_user_id").notNull().references(() => users.id),
+  fileName: text("file_name").notNull(),
+  contentType: text("content_type").notNull(),
+  sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
+  data: bytea("data").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("attachments_bill_idx").on(table.billId)]);
+
+export const billComments = pgTable("bill_comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  billId: uuid("bill_id").notNull().references(() => bills.id, { onDelete: "cascade" }),
+  authorUserId: uuid("author_user_id").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("comments_bill_date_idx").on(table.billId, table.createdAt)]);
+
+export const householdInvites = pgTable("household_invites", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  createdByUserId: uuid("created_by_user_id").notNull().references(() => users.id),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedByUserId: uuid("used_by_user_id").references(() => users.id),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("invites_household_idx").on(table.householdId)]);
 
 export const billChangeHistory = pgTable("bill_change_history", {
   id: uuid("id").primaryKey().defaultRandom(),

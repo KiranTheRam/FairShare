@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { NextRequest } from "next/server";
 import { getDb } from "@/db";
-import { billAllocations, billChangeHistory, billContributions, bills, obligations, payments, users } from "@/db/schema";
+import { billAllocations, billAttachments, billChangeHistory, billComments, billContributions, bills, obligations, payments, users } from "@/db/schema";
 import { apiRoute } from "@/lib/api";
 import { requireMutationUser, requireRequestUser } from "@/lib/auth";
 import { requireFinancialAccess, writeAudit } from "@/lib/access";
@@ -23,15 +23,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ hou
     const db = getDb();
     const [bill] = await db.select().from(bills).where(and(eq(bills.id, billId), eq(bills.householdId, householdId))).limit(1);
     if (!bill) throw new ApiError(404, "Bill not found", "not_found");
-    const [contributions, allocations, obligationRows, paymentRows, history] = await Promise.all([
+    const [contributions, allocations, obligationRows, paymentRows, history, comments, attachments] = await Promise.all([
       db.select({ id: billContributions.id, userId: billContributions.payerUserId, displayName: users.displayName, amountCents: billContributions.amountCents, paidAt: billContributions.paidAt }).from(billContributions).innerJoin(users, eq(users.id, billContributions.payerUserId)).where(eq(billContributions.billId, billId)),
       db.select({ id: billAllocations.id, userId: billAllocations.memberUserId, displayName: users.displayName, amountCents: billAllocations.amountCents, percentageBasisPoints: billAllocations.percentageBasisPoints }).from(billAllocations).innerJoin(users, eq(users.id, billAllocations.memberUserId)).where(eq(billAllocations.billId, billId)),
       db.select({ id: obligations.id, debtorUserId: obligations.debtorUserId, creditorUserId: obligations.creditorUserId, debtorName: debtor.displayName, creditorName: creditor.displayName, originalAmountCents: obligations.originalAmountCents }).from(obligations).innerJoin(debtor, eq(debtor.id, obligations.debtorUserId)).innerJoin(creditor, eq(creditor.id, obligations.creditorUserId)).where(and(eq(obligations.billId, billId), eq(obligations.active, true))),
       db.select({ id: payments.id, payerUserId: payments.payerUserId, recipientUserId: payments.recipientUserId, amountCents: payments.amountCents, note: payments.note, paidAt: payments.paidAt }).from(payments).where(eq(payments.billId, billId)).orderBy(desc(payments.paidAt)),
       db.select({ id: billChangeHistory.id, changeType: billChangeHistory.changeType, beforeValue: billChangeHistory.beforeValue, afterValue: billChangeHistory.afterValue, changedAt: billChangeHistory.changedAt, changedBy: users.displayName }).from(billChangeHistory).innerJoin(users, eq(users.id, billChangeHistory.changedByUserId)).where(eq(billChangeHistory.billId, billId)).orderBy(desc(billChangeHistory.changedAt)),
+      db.select({ id: billComments.id, authorUserId: billComments.authorUserId, authorName: users.displayName, body: billComments.body, createdAt: billComments.createdAt }).from(billComments).innerJoin(users, eq(users.id, billComments.authorUserId)).where(eq(billComments.billId, billId)).orderBy(billComments.createdAt),
+      db.select({ id: billAttachments.id, fileName: billAttachments.fileName, contentType: billAttachments.contentType, sizeBytes: billAttachments.sizeBytes, uploadedByUserId: billAttachments.uploadedByUserId, uploadedByName: users.displayName, createdAt: billAttachments.createdAt }).from(billAttachments).innerJoin(users, eq(users.id, billAttachments.uploadedByUserId)).where(eq(billAttachments.billId, billId)).orderBy(billAttachments.createdAt),
     ]);
     const detailedObligations = obligationRows.map((item) => ({ ...item, paidAmountCents: paymentRows.filter((payment) => payment.payerUserId === item.debtorUserId && payment.recipientUserId === item.creditorUserId).reduce((sum, payment) => sum + payment.amountCents, 0) })).map((item) => ({ ...item, outstandingAmountCents: Math.max(0, item.originalAmountCents - item.paidAmountCents) }));
-    return { bill, contributions, allocations, obligations: detailedObligations, payments: paymentRows, history };
+    return { bill, contributions, allocations, obligations: detailedObligations, payments: paymentRows, history, comments, attachments };
   });
 }
 

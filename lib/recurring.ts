@@ -23,7 +23,7 @@ export async function generateDueBills(now = new Date()) {
     const occurrence = template.nextOccurrence.toISOString().slice(0, 10);
     try {
       await createBill(template.householdId, template.createdByUserId, {
-        name: template.name, amountCents, periodLabel: occurrence, dueDate: template.nextOccurrence.toISOString(),
+        name: template.name, category: template.category, amountCents, periodLabel: occurrence, dueDate: template.nextOccurrence.toISOString(),
         amountState: template.expectedAmountCents === null ? "estimated" : "final", allocationMethod: template.allocationMethod,
         contributions: template.templateConfig.contributions, allocations: template.templateConfig.allocations,
         recurringTemplateId: template.id,

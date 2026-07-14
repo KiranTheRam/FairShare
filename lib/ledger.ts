@@ -7,7 +7,7 @@ import { ApiError } from "./http";
 import { validateMemberIds } from "./access";
 import type { z } from "zod";
 import type { billCreateSchema, billSchema } from "./validation";
-import { calculateTransfers as calculateLedgerTransfers, LedgerCalculationError } from "./ledger-calculation";
+import { calculateTransfers as calculateLedgerTransfers, LedgerCalculationError, simplifyBalances } from "./ledger-calculation";
 
 const paymentPayer = alias(users, "payment_payer");
 const paymentRecipient = alias(users, "payment_recipient");
@@ -31,7 +31,7 @@ export async function createBill(householdId: string, actorUserId: string, input
     let recurringTemplateId = input.recurringTemplateId ?? null;
     if (input.recurring) {
       const [template] = await tx.insert(recurringBillTemplates).values({
-        householdId, name: input.recurring.name, expectedAmountCents: input.recurring.expectedAmountCents,
+        householdId, name: input.recurring.name, category: input.recurring.category, expectedAmountCents: input.recurring.expectedAmountCents,
         cadence: input.recurring.cadence, nextOccurrence: new Date(input.recurring.nextOccurrence),
         allocationMethod: input.recurring.allocationMethod,
         templateConfig: { contributions: input.recurring.contributions, allocations: input.recurring.allocations },
@@ -40,7 +40,7 @@ export async function createBill(householdId: string, actorUserId: string, input
       recurringTemplateId = template.id;
     }
     const [bill] = await tx.insert(bills).values({
-      householdId, createdByUserId: actorUserId, name: input.name, amountCents: input.amountCents,
+      householdId, createdByUserId: actorUserId, name: input.name, category: input.category, amountCents: input.amountCents,
       periodLabel: input.periodLabel, dueDate: input.dueDate ? new Date(input.dueDate) : null,
       status: transfers.length ? "open" : "settled", amountState: input.amountState, allocationMethod: input.allocationMethod,
       recurringTemplateId,
@@ -61,7 +61,7 @@ export async function updateBill(billId: string, householdId: string, actorUserI
     if (!existing) throw new ApiError(404, "Bill not found", "not_found");
     if (existing.revision !== expectedRevision) throw new ApiError(409, "This bill changed since you opened it", "revision_conflict");
     const revision = existing.revision + 1;
-    const [bill] = await tx.update(bills).set({ name: input.name, amountCents: input.amountCents, periodLabel: input.periodLabel, dueDate: input.dueDate ? new Date(input.dueDate) : null, status: transfers.length ? "open" : "settled", amountState: input.amountState, allocationMethod: input.allocationMethod, revision, updatedAt: new Date() }).where(and(eq(bills.id, billId), eq(bills.revision, expectedRevision))).returning();
+    const [bill] = await tx.update(bills).set({ name: input.name, category: input.category, amountCents: input.amountCents, periodLabel: input.periodLabel, dueDate: input.dueDate ? new Date(input.dueDate) : null, status: transfers.length ? "open" : "settled", amountState: input.amountState, allocationMethod: input.allocationMethod, revision, updatedAt: new Date() }).where(and(eq(bills.id, billId), eq(bills.revision, expectedRevision))).returning();
     if (!bill) throw new ApiError(409, "This bill changed since you opened it", "revision_conflict");
     await tx.delete(billContributions).where(eq(billContributions.billId, billId));
     await tx.delete(billAllocations).where(eq(billAllocations.billId, billId));
@@ -109,12 +109,15 @@ export async function householdSnapshot(householdId: string) {
     if (difference > 0) outstanding.set(key, { ...entry, amountCents: difference });
     else if (difference < 0) outstanding.set(reverseKey, { payerUserId: entry.recipientUserId, recipientUserId: entry.payerUserId, amountCents: -difference });
   }
-  const userIds = [...new Set([...outstanding.values()].flatMap((item) => [item.payerUserId, item.recipientUserId]).concat(billRows.map((bill) => bill.createdByUserId), paymentRows.map((payment) => payment.createdByUserId)))];
+  const balances = [...outstanding.values()].filter((item) => item.amountCents > 0);
+  const simplified = simplifyBalances(balances).map((item) => ({ payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, amountCents: item.amountCents }));
+  const userIds = [...new Set(balances.concat(simplified).flatMap((item) => [item.payerUserId, item.recipientUserId]).concat(billRows.map((bill) => bill.createdByUserId), paymentRows.map((payment) => payment.createdByUserId)))];
   const names = userIds.length ? await db.select({ id: users.id, displayName: users.displayName }).from(users).where(inArray(users.id, userIds)) : [];
   const nameMap = new Map(names.map((item) => [item.id, item.displayName]));
   return {
     bills: billRows.map((bill) => ({ ...bill, createdByName: nameMap.get(bill.createdByUserId) })),
-    balances: [...outstanding.values()].filter((item) => item.amountCents > 0).map((item) => ({ ...item, payerName: nameMap.get(item.payerUserId), recipientName: nameMap.get(item.recipientUserId) })),
+    balances: balances.map((item) => ({ ...item, payerName: nameMap.get(item.payerUserId), recipientName: nameMap.get(item.recipientUserId) })),
+    simplifiedBalances: simplified.map((item) => ({ ...item, payerName: nameMap.get(item.payerUserId), recipientName: nameMap.get(item.recipientUserId) })),
     payments: paymentRows.map((payment) => ({ ...payment, actorName: nameMap.get(payment.createdByUserId) })),
     closures: closureRows,
   };

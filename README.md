@@ -24,7 +24,14 @@ FairShare is a self-hosted, mobile-first Progressive Web App for shared househol
 - Strict Household-scoped authorization on every financial read and write.
 - Multiple Households and administrator-managed membership.
 - Bills with vendor contributions, equal/percentage/fixed allocations, revisions, and change history.
+- Bill categories with a household spending breakdown.
+- Receipt and invoice attachments (JPEG, PNG, WebP, GIF, PDF up to 5 MB) stored in PostgreSQL with content verification.
+- Per-bill comment threads for household discussion in context.
 - Server-calculated obligations and recipient-confirmed, idempotent partial or complete repayments.
+- A read-only Simplified view that suggests the fewest repayments to settle the whole household without altering the ledger.
+- Single-use, expiring invite links so members can bring in a roommate without administrator involvement.
+- Creditor-initiated payment reminders with a 24-hour per-person cooldown.
+- CSV export of bills and payments for reconciliation or move-out.
 - Per-person bill settlement, audited manual expense closure, and clear Outstanding/Settled history.
 - Recurring bill templates with an idempotent hourly scheduler.
 - Dedicated Upcoming view for scheduled expenses and an auditable household Activity timeline.

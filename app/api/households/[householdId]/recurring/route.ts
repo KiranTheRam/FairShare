@@ -24,7 +24,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ho
     await requireFinancialAccess(user, householdId);
     const input = await parseJson(request, recurringSchema);
     await validateMemberIds(householdId, [...input.contributions.map((item) => item.userId), ...input.allocations.map((item) => item.userId)]);
-    const [template] = await getDb().insert(recurringBillTemplates).values({ householdId, name: input.name, expectedAmountCents: input.expectedAmountCents, cadence: input.cadence, nextOccurrence: new Date(input.nextOccurrence), allocationMethod: input.allocationMethod, templateConfig: { contributions: input.contributions, allocations: input.allocations }, active: input.active ?? true, createdByUserId: user.id }).returning();
+    const [template] = await getDb().insert(recurringBillTemplates).values({ householdId, name: input.name, category: input.category, expectedAmountCents: input.expectedAmountCents, cadence: input.cadence, nextOccurrence: new Date(input.nextOccurrence), allocationMethod: input.allocationMethod, templateConfig: { contributions: input.contributions, allocations: input.allocations }, active: input.active ?? true, createdByUserId: user.id }).returning();
     await writeAudit(request, user, "recurring.created", "recurring_template", template.id, householdId);
     return { recurring: template };
   }, 201);
