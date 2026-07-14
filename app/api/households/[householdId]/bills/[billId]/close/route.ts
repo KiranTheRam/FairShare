@@ -5,7 +5,7 @@ import { billChangeHistory, bills } from "@/db/schema";
 import { apiRoute } from "@/lib/api";
 import { requireMutationUser } from "@/lib/auth";
 import { requireFinancialAccess, writeAudit } from "@/lib/access";
-import { ApiError } from "@/lib/http";
+import { ApiError, requireUuid } from "@/lib/http";
 import { notifyHousehold } from "@/lib/notifications";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ householdId: string; billId: string }> }) {
@@ -13,8 +13,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ho
     const user = await requireMutationUser(request);
     const { householdId, billId } = await context.params;
     await requireFinancialAccess(user, householdId);
+    requireUuid(billId, "bill identifier");
     const bill = await getDb().transaction(async (tx) => {
-      const [existing] = await tx.select().from(bills).where(and(eq(bills.id, billId), eq(bills.householdId, householdId))).limit(1);
+      const [existing] = await tx.select().from(bills).where(and(eq(bills.id, billId), eq(bills.householdId, householdId))).limit(1).for("update");
       if (!existing || existing.deletedAt) throw new ApiError(404, "Bill not found", "not_found");
       if (existing.status !== "open") throw new ApiError(409, "This bill is already settled", "bill_already_settled");
       const [settled] = await tx.update(bills).set({ status: "settled", updatedAt: new Date() }).where(and(eq(bills.id, billId), eq(bills.status, "open"))).returning();

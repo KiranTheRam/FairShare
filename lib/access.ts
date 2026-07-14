@@ -3,10 +3,11 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { auditLogs, householdMemberships, households, users } from "@/db/schema";
 import type { AuthenticatedUser } from "./auth";
-import { ApiError, clientIp } from "./http";
+import { ApiError, clientIp, requireUuid } from "./http";
 import type { NextRequest } from "next/server";
 
 export async function requireHouseholdAccess(user: AuthenticatedUser, householdId: string) {
+  requireUuid(householdId, "Household identifier");
   const db = getDb();
   if (user.role === "administrator") {
     const [household] = await db.select().from(households).where(eq(households.id, householdId)).limit(1);

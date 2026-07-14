@@ -93,14 +93,17 @@ export async function deleteSession(request: NextRequest, response: NextResponse
 
 export async function isLoginRateLimited(email: string, ip: string) {
   const since = new Date(Date.now() - 15 * 60_000);
-  const result = await getDb().select({ attempts: count() }).from(loginAttempts).where(and(eq(loginAttempts.email, email), eq(loginAttempts.ipAddress, ip), eq(loginAttempts.successful, false), gt(loginAttempts.attemptedAt, since)));
-  return Number(result[0]?.attempts ?? 0) >= 8;
+  const [emailResult, ipResult] = await Promise.all([
+    getDb().select({ attempts: count() }).from(loginAttempts).where(and(eq(loginAttempts.email, email), eq(loginAttempts.successful, false), gt(loginAttempts.attemptedAt, since))),
+    getDb().select({ attempts: count() }).from(loginAttempts).where(and(eq(loginAttempts.ipAddress, ip), eq(loginAttempts.successful, false), gt(loginAttempts.attemptedAt, since))),
+  ]);
+  return Number(emailResult[0]?.attempts ?? 0) >= 8 || Number(ipResult[0]?.attempts ?? 0) >= 40;
 }
 
 export async function recordLoginAttempt(email: string, ip: string, successful: boolean) {
   const db = getDb();
   await db.insert(loginAttempts).values({ email, ipAddress: ip, successful });
-  if (successful) await db.delete(loginAttempts).where(and(eq(loginAttempts.email, email), eq(loginAttempts.ipAddress, ip), eq(loginAttempts.successful, false)));
+  if (successful) await db.delete(loginAttempts).where(and(eq(loginAttempts.email, email), eq(loginAttempts.successful, false)));
   if (Math.random() < 0.05) await db.delete(loginAttempts).where(sql`${loginAttempts.attemptedAt} < now() - interval '1 day'`);
 }
 

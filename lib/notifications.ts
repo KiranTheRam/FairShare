@@ -3,6 +3,7 @@ import webPush from "web-push";
 import { and, eq, ne } from "drizzle-orm";
 import { getDb } from "@/db";
 import { householdMemberships, notificationPreferences, notifications, pushSubscriptions, users } from "@/db/schema";
+import { isAllowedPushEndpoint } from "./push-security";
 
 let configured = false;
 function configurePush() {
@@ -25,8 +26,12 @@ export async function notifyUser(input: { householdId: string; userId: string; t
   if (!configurePush()) return;
   const subscriptions = await getDb().select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, input.userId));
   await Promise.all(subscriptions.map(async (subscription) => {
+    if (!isAllowedPushEndpoint(subscription.endpoint)) {
+      await getDb().delete(pushSubscriptions).where(eq(pushSubscriptions.id, subscription.id));
+      return;
+    }
     try {
-      await webPush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify({ title: input.title, body: input.body, url: input.targetPath ?? "/" }), { TTL: 86_400 });
+      await webPush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify({ title: input.title, body: input.body, url: input.targetPath ?? "/" }), { TTL: 86_400, timeout: 10_000 });
     } catch (error) {
       const status = typeof error === "object" && error && "statusCode" in error ? Number(error.statusCode) : 0;
       if (status === 404 || status === 410) await getDb().delete(pushSubscriptions).where(eq(pushSubscriptions.id, subscription.id));

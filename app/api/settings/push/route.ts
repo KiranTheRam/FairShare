@@ -6,11 +6,13 @@ import { apiRoute } from "@/lib/api";
 import { requireMutationUser } from "@/lib/auth";
 import { pushSubscriptionSchema } from "@/lib/validation";
 import { parseJson, readJson } from "@/lib/http";
+import { requireAllowedPushEndpoint } from "@/lib/push-security";
 
 export async function POST(request: NextRequest) {
   return apiRoute(async () => {
     const user = await requireMutationUser(request);
     const input = await parseJson(request, pushSubscriptionSchema);
+    requireAllowedPushEndpoint(input.endpoint);
     await getDb().insert(pushSubscriptions).values({ userId: user.id, endpoint: input.endpoint, p256dh: input.keys.p256dh, auth: input.keys.auth }).onConflictDoUpdate({ target: pushSubscriptions.endpoint, set: { userId: user.id, p256dh: input.keys.p256dh, auth: input.keys.auth } });
     return { ok: true };
   }, 201);

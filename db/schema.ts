@@ -123,6 +123,7 @@ export const obligations = pgTable("obligations", {
 
 export const payments = pgTable("payments", {
   id: uuid("id").primaryKey().defaultRandom(),
+  idempotencyKey: uuid("idempotency_key"),
   householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
   billId: uuid("bill_id").references(() => bills.id, { onDelete: "set null" }),
   payerUserId: uuid("payer_user_id").notNull().references(() => users.id),
@@ -132,7 +133,7 @@ export const payments = pgTable("payments", {
   paidAt: timestamp("paid_at", { withTimezone: true }).notNull(),
   createdByUserId: uuid("created_by_user_id").notNull().references(() => users.id),
   ...createdUpdated,
-}, (table) => [index("payments_household_date_idx").on(table.householdId, table.paidAt), index("payments_bill_idx").on(table.billId)]);
+}, (table) => [uniqueIndex("payments_idempotency_key_unique").on(table.idempotencyKey), index("payments_household_date_idx").on(table.householdId, table.paidAt), index("payments_bill_idx").on(table.billId)]);
 
 export const billChangeHistory = pgTable("bill_change_history", {
   id: uuid("id").primaryKey().defaultRandom(),

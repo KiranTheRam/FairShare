@@ -24,7 +24,7 @@ FairShare is a self-hosted, mobile-first Progressive Web App for shared househol
 - Strict Household-scoped authorization on every financial read and write.
 - Multiple Households and administrator-managed membership.
 - Bills with vendor contributions, equal/percentage/fixed allocations, revisions, and change history.
-- Server-calculated obligations and partial or complete repayments.
+- Server-calculated obligations and recipient-confirmed, idempotent partial or complete repayments.
 - Per-person bill settlement, audited manual expense closure, and clear Outstanding/Settled history.
 - Recurring bill templates with an idempotent hourly scheduler.
 - Dedicated Upcoming view for scheduled expenses and an auditable household Activity timeline.
@@ -57,6 +57,7 @@ Edit `.env` and set:
 - `APP_ORIGIN` to the exact public HTTPS origin, such as `https://fairshare.example.com` (no trailing slash).
 - `POSTGRES_PASSWORD`, `FAIRSHARE_SETUP_TOKEN`, and `CRON_SECRET` to different random values.
 - Optional VAPID values if Web Push is required. Generate them with `npx web-push generate-vapid-keys`.
+- Optional `PUSH_ALLOWED_HOSTS` entries when supporting a push provider beyond the built-in Google, Mozilla, Apple, and Microsoft endpoints.
 
 Start the stack:
 

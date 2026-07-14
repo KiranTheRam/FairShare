@@ -6,7 +6,7 @@ import { billAllocations, billChangeHistory, billContributions, bills, obligatio
 import { apiRoute } from "@/lib/api";
 import { requireMutationUser, requireRequestUser } from "@/lib/auth";
 import { requireFinancialAccess, writeAudit } from "@/lib/access";
-import { ApiError, parseJson } from "@/lib/http";
+import { ApiError, parseJson, requireUuid } from "@/lib/http";
 import { updateBill } from "@/lib/ledger";
 import { billUpdateSchema } from "@/lib/validation";
 import { notifyHousehold } from "@/lib/notifications";
@@ -19,6 +19,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ hou
     const user = await requireRequestUser(request);
     const { householdId, billId } = await context.params;
     await requireFinancialAccess(user, householdId);
+    requireUuid(billId, "bill identifier");
     const db = getDb();
     const [bill] = await db.select().from(bills).where(and(eq(bills.id, billId), eq(bills.householdId, householdId))).limit(1);
     if (!bill) throw new ApiError(404, "Bill not found", "not_found");
@@ -39,6 +40,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ h
     const user = await requireMutationUser(request);
     const { householdId, billId } = await context.params;
     await requireFinancialAccess(user, householdId);
+    requireUuid(billId, "bill identifier");
     const input = await parseJson(request, billUpdateSchema);
     const bill = await updateBill(billId, householdId, user.id, input.revision, input);
     await writeAudit(request, user, "bill.updated", "bill", billId, householdId, { revision: bill.revision });
@@ -52,6 +54,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     const user = await requireMutationUser(request);
     const { householdId, billId } = await context.params;
     await requireFinancialAccess(user, householdId);
+    requireUuid(billId, "bill identifier");
     const bill = await getDb().transaction(async (tx) => {
       const [removed] = await tx.update(bills).set({ status: "void", deletedAt: new Date(), updatedAt: new Date() }).where(and(eq(bills.id, billId), eq(bills.householdId, householdId))).returning();
       if (!removed) throw new ApiError(404, "Bill not found", "not_found");

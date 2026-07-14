@@ -4,7 +4,7 @@ import { getDb } from "@/db";
 import { sessions, users } from "@/db/schema";
 import { apiRoute } from "@/lib/api";
 import { requireAdmin, requireMutationUser } from "@/lib/auth";
-import { ApiError, readJson } from "@/lib/http";
+import { ApiError, readJson, requireUuid } from "@/lib/http";
 import { writeAudit } from "@/lib/access";
 import { hashPassword } from "@/lib/security";
 import { userUpdateSchema } from "@/lib/validation";
@@ -13,6 +13,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
   return apiRoute(async () => {
     const actor = requireAdmin(await requireMutationUser(request));
     const { userId } = await context.params;
+    requireUuid(userId, "user identifier");
     const body = await readJson(request);
     const input = userUpdateSchema.parse({ ...(typeof body === "object" && body ? body : {}), id: userId });
     if (userId === actor.id && input.status === "disabled") throw new ApiError(400, "You cannot disable your own account", "self_disable");

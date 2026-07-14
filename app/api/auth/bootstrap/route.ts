@@ -4,7 +4,7 @@ import { count, sql } from "drizzle-orm";
 import { notificationPreferences, users } from "@/db/schema";
 import { bootstrapSchema } from "@/lib/validation";
 import { hasAnyUsers, createSession } from "@/lib/auth";
-import { ApiError, assertSameOrigin, parseJson } from "@/lib/http";
+import { ApiError, assertSameOrigin, jsonError, parseJson } from "@/lib/http";
 import { constantTimeEqual, hashPassword } from "@/lib/security";
 
 export async function POST(request: NextRequest) {
@@ -28,8 +28,6 @@ export async function POST(request: NextRequest) {
     await createSession(user.id, request, response);
     return response;
   } catch (error) {
-    const status = error instanceof ApiError ? error.status : 400;
-    const message = error instanceof Error ? error.message : "Setup failed";
-    return NextResponse.json({ error: message }, { status });
+    return jsonError(error);
   }
 }
