@@ -242,9 +242,9 @@ a { color: inherit; text-decoration: none; }
 .secondary-button:hover { border-color: var(--field-line); }
 .text-button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; padding: 0; color: var(--teal); font-size: 11px; font-weight: 750; cursor: pointer; }
 
-.dashboard-grid { display: grid; grid-template-columns: minmax(280px, .72fr) minmax(430px, 1.28fr); gap: 16px; align-items: stretch; }
+.dashboard-grid { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: stretch; }
 .card, .summary-card, .wide-card { background: var(--paper); border: 1px solid var(--line); border-radius: 17px; box-shadow: 0 3px 15px rgba(28,48,41,.025); }
-.summary-card { grid-row: span 2; padding: 21px; background: var(--hero); color: white; border: 0; box-shadow: 0 18px 36px rgba(19,54,46,.14); }
+.summary-card { padding: 21px; background: var(--hero); color: white; border: 0; box-shadow: 0 18px 36px rgba(19,54,46,.14); }
 .summary-top { display: flex; align-items: center; gap: 9px; color: var(--hero-soft); font-size: 11px; }
 .summary-top button { margin-left: auto; color: var(--hero-muted); border: 0; background: transparent; cursor: pointer; }
 .summary-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; background: rgba(255,255,255,.1); }
@@ -310,8 +310,8 @@ a { color: inherit; text-decoration: none; }
 .upcoming-view { min-height: 260px; }
 .upcoming-list { display: grid; }
 .upcoming-card .text-button { margin-top: 11px; }
-.quick-card { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-radius: 17px; background: var(--quick-bg); border: 1px solid var(--quick-line); }
-.quick-card > div { display: flex; align-items: center; gap: 12px; }
+.quick-card { grid-column: 1 / -1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 20px; border-radius: 17px; background: var(--quick-bg); border: 1px solid var(--quick-line); }
+.quick-card > div { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .quick-card > div:first-child > span:last-child, .quick-action span { display: grid; gap: 3px; }
 .quick-card strong { font-size: 11.5px; }
 .quick-card small { color: var(--muted); font-size: 9.5px; }
@@ -823,9 +823,15 @@ a { color: inherit; text-decoration: none; }
 @keyframes rise-in { from { opacity: 0; transform: translateY(12px); } }
 @keyframes slide-in { from { transform: translateX(30px); opacity: .5; } }
 
-@media (min-width: 1100px) {
-  .dashboard-grid { grid-template-columns: minmax(280px, .7fr) minmax(360px, 1fr) minmax(290px, .8fr); }
+/* two columns once the content area (viewport minus sidebar and padding) actually fits them */
+@media (min-width: 1080px) {
+  .dashboard-grid { grid-template-columns: minmax(280px, .72fr) minmax(430px, 1.28fr); }
   .summary-card { grid-row: span 2; }
+  .recent-card { grid-column: 2; }
+}
+
+@media (min-width: 1340px) {
+  .dashboard-grid { grid-template-columns: minmax(280px, .7fr) minmax(360px, 1fr) minmax(290px, .8fr); }
   .attention-card { grid-column: 2 / -1; }
   .recent-card { grid-column: 2; }
   .upcoming-card { grid-column: 3; }
@@ -839,7 +845,6 @@ a { color: inherit; text-decoration: none; }
   .topbar { justify-content: space-between; padding: 0 22px; }
   .menu-button { display: grid; }
   .content-wrap { width: min(100% - 40px, 760px); }
-  .dashboard-grid { grid-template-columns: 1fr 1.3fr; }
   .month-total { grid-template-columns: 1fr 1fr; }
   .month-total span:nth-child(2) { border: 0; }
   .relationship-grid { grid-template-columns: 1fr; }
