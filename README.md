@@ -25,7 +25,9 @@ FairShare is a self-hosted, mobile-first Progressive Web App for shared househol
 - Multiple Households and administrator-managed membership.
 - Bills with vendor contributions, equal/percentage/fixed allocations, revisions, and change history.
 - Server-calculated obligations and partial or complete repayments.
+- Per-person bill settlement, audited manual expense closure, and clear Outstanding/Settled history.
 - Recurring bill templates with an idempotent hourly scheduler.
+- Dedicated Upcoming view for scheduled expenses and an auditable household Activity timeline.
 - In-app notifications and optional standards-based Web Push.
 - Neutral Dark by default, plus account-persisted Forest Green and Light themes in user settings.
 - Installable PWA behavior and a responsive desktop/mobile interface.

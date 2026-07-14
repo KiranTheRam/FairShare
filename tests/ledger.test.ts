@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateTransfers, LedgerCalculationError } from "../lib/ledger-calculation";
+import { areObligationsSettled, calculateTransfers, LedgerCalculationError } from "../lib/ledger-calculation";
 
 test("calculates a deterministic equal split with multiple external payers", () => {
   const transfers = calculateTransfers({
@@ -22,4 +22,20 @@ test("rejects a bill when contributions do not match the bill total", () => {
 
 test("requires percentage allocations to total exactly 100 percent", () => {
   assert.throws(() => calculateTransfers({ amountCents: 10_000, allocationMethod: "percentage", contributions: [{ userId: "a", amountCents: 10_000 }], allocations: [{ userId: "a", amountCents: 5_000, percentageBasisPoints: 5_000 }, { userId: "b", amountCents: 5_000, percentageBasisPoints: 4_999 }] }), (error: unknown) => error instanceof LedgerCalculationError && error.code === "invalid_percentage");
+});
+
+test("settles a multi-person bill only after every obligation is fully paid", () => {
+  const obligations = [
+    { debtorUserId: "alex", creditorUserId: "kiran", amountCents: 4_000 },
+    { debtorUserId: "sam", creditorUserId: "kiran", amountCents: 4_000 },
+  ];
+  assert.equal(areObligationsSettled(obligations, [
+    { payerUserId: "alex", recipientUserId: "kiran", amountCents: 4_000 },
+    { payerUserId: "sam", recipientUserId: "kiran", amountCents: 2_000 },
+  ]), false);
+  assert.equal(areObligationsSettled(obligations, [
+    { payerUserId: "alex", recipientUserId: "kiran", amountCents: 4_000 },
+    { payerUserId: "sam", recipientUserId: "kiran", amountCents: 1_500 },
+    { payerUserId: "sam", recipientUserId: "kiran", amountCents: 2_500 },
+  ]), true);
 });

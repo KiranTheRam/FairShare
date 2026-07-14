@@ -1,5 +1,6 @@
 import "server-only";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { getDb } from "@/db";
 import { billAllocations, billChangeHistory, billContributions, bills, obligations, payments, recurringBillTemplates, users } from "@/db/schema";
 import { ApiError } from "./http";
@@ -7,6 +8,10 @@ import { validateMemberIds } from "./access";
 import type { z } from "zod";
 import type { billCreateSchema, billSchema } from "./validation";
 import { calculateTransfers as calculateLedgerTransfers, LedgerCalculationError } from "./ledger-calculation";
+
+const paymentPayer = alias(users, "payment_payer");
+const paymentRecipient = alias(users, "payment_recipient");
+const closureActor = alias(users, "closure_actor");
 
 type BillInput = z.infer<typeof billSchema>;
 type BillCreateInput = z.infer<typeof billCreateSchema>;
@@ -37,7 +42,7 @@ export async function createBill(householdId: string, actorUserId: string, input
     const [bill] = await tx.insert(bills).values({
       householdId, createdByUserId: actorUserId, name: input.name, amountCents: input.amountCents,
       periodLabel: input.periodLabel, dueDate: input.dueDate ? new Date(input.dueDate) : null,
-      amountState: input.amountState, allocationMethod: input.allocationMethod,
+      status: transfers.length ? "open" : "settled", amountState: input.amountState, allocationMethod: input.allocationMethod,
       recurringTemplateId,
     }).returning();
     await tx.insert(billContributions).values(input.contributions.map((item) => ({ billId: bill.id, payerUserId: item.userId, amountCents: item.amountCents, paidAt: new Date(), createdByUserId: actorUserId })));
@@ -56,7 +61,7 @@ export async function updateBill(billId: string, householdId: string, actorUserI
     if (!existing) throw new ApiError(404, "Bill not found", "not_found");
     if (existing.revision !== expectedRevision) throw new ApiError(409, "This bill changed since you opened it", "revision_conflict");
     const revision = existing.revision + 1;
-    const [bill] = await tx.update(bills).set({ name: input.name, amountCents: input.amountCents, periodLabel: input.periodLabel, dueDate: input.dueDate ? new Date(input.dueDate) : null, amountState: input.amountState, allocationMethod: input.allocationMethod, revision, updatedAt: new Date() }).where(and(eq(bills.id, billId), eq(bills.revision, expectedRevision))).returning();
+    const [bill] = await tx.update(bills).set({ name: input.name, amountCents: input.amountCents, periodLabel: input.periodLabel, dueDate: input.dueDate ? new Date(input.dueDate) : null, status: transfers.length ? "open" : "settled", amountState: input.amountState, allocationMethod: input.allocationMethod, revision, updatedAt: new Date() }).where(and(eq(bills.id, billId), eq(bills.revision, expectedRevision))).returning();
     if (!bill) throw new ApiError(409, "This bill changed since you opened it", "revision_conflict");
     await tx.delete(billContributions).where(eq(billContributions.billId, billId));
     await tx.delete(billAllocations).where(eq(billAllocations.billId, billId));
@@ -71,11 +76,14 @@ export async function updateBill(billId: string, householdId: string, actorUserI
 
 export async function householdSnapshot(householdId: string) {
   const db = getDb();
-  const [billRows, obligationRows, paymentRows] = await Promise.all([
+  const [billRows, obligationRows, paymentRows, closureRows] = await Promise.all([
     db.select().from(bills).where(and(eq(bills.householdId, householdId), isNull(bills.deletedAt))).orderBy(desc(bills.createdAt)),
     db.select({ id: obligations.id, billId: obligations.billId, debtorUserId: obligations.debtorUserId, creditorUserId: obligations.creditorUserId, amountCents: obligations.originalAmountCents, billName: bills.name })
       .from(obligations).innerJoin(bills, eq(bills.id, obligations.billId)).where(and(eq(obligations.householdId, householdId), eq(obligations.active, true))),
-    db.select().from(payments).where(eq(payments.householdId, householdId)).orderBy(desc(payments.paidAt)),
+    db.select({ id: payments.id, billId: payments.billId, payerUserId: payments.payerUserId, recipientUserId: payments.recipientUserId, payerName: paymentPayer.displayName, recipientName: paymentRecipient.displayName, billName: bills.name, amountCents: payments.amountCents, note: payments.note, paidAt: payments.paidAt })
+      .from(payments).innerJoin(paymentPayer, eq(paymentPayer.id, payments.payerUserId)).innerJoin(paymentRecipient, eq(paymentRecipient.id, payments.recipientUserId)).leftJoin(bills, eq(bills.id, payments.billId)).where(eq(payments.householdId, householdId)).orderBy(desc(payments.paidAt)),
+    db.select({ id: billChangeHistory.id, billId: bills.id, billName: bills.name, actorName: closureActor.displayName, changedAt: billChangeHistory.changedAt })
+      .from(billChangeHistory).innerJoin(bills, eq(bills.id, billChangeHistory.billId)).innerJoin(closureActor, eq(closureActor.id, billChangeHistory.changedByUserId)).where(and(eq(bills.householdId, householdId), eq(billChangeHistory.changeType, "closed_without_payment"))).orderBy(desc(billChangeHistory.changedAt)),
   ]);
   const directional = new Map<string, { payerUserId: string; recipientUserId: string; amountCents: number }>();
   for (const item of obligationRows) {
@@ -108,6 +116,7 @@ export async function householdSnapshot(householdId: string) {
     bills: billRows,
     balances: [...outstanding.values()].filter((item) => item.amountCents > 0).map((item) => ({ ...item, payerName: nameMap.get(item.payerUserId), recipientName: nameMap.get(item.recipientUserId) })),
     payments: paymentRows,
+    closures: closureRows,
   };
 }
 

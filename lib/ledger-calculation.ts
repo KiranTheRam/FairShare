@@ -6,6 +6,8 @@ export type LedgerInput = {
 };
 
 export type Transfer = { debtorUserId: string; creditorUserId: string; amountCents: number };
+export type SettlementObligation = { debtorUserId: string; creditorUserId: string; amountCents: number };
+export type SettlementPayment = { payerUserId: string; recipientUserId: string; amountCents: number };
 
 export class LedgerCalculationError extends Error {
   constructor(message: string, public code: string) { super(message); }
@@ -39,4 +41,10 @@ export function calculateTransfers(input: LedgerInput): Transfer[] {
     if (debtor.amount === 0) debtorIndex += 1;
   }
   return transfers;
+}
+
+export function areObligationsSettled(obligations: SettlementObligation[], payments: SettlementPayment[]) {
+  return obligations.every((obligation) => payments
+    .filter((payment) => payment.payerUserId === obligation.debtorUserId && payment.recipientUserId === obligation.creditorUserId)
+    .reduce((sum, payment) => sum + payment.amountCents, 0) >= obligation.amountCents);
 }
