@@ -63,18 +63,32 @@ export function HouseholdApp() {
   // refresh is intentionally keyed only by the selected Household.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (householdId) void refresh(); }, [householdId]);
+
+  // Other members' changes (payments, bills) never reach an already-open tab on
+  // their own, so refetch silently when this tab regains focus and poll gently
+  // while it stays visible.
+  useEffect(() => {
+    if (!householdId) return;
+    const refetch = () => { if (document.visibilityState === "visible") void refresh({ silent: true }); };
+    const timer = setInterval(refetch, 45_000);
+    window.addEventListener("focus", refetch);
+    document.addEventListener("visibilitychange", refetch);
+    return () => { clearInterval(timer); window.removeEventListener("focus", refetch); document.removeEventListener("visibilitychange", refetch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [householdId]);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(""), 3200); return () => clearTimeout(timer); }, [toast]);
 
-  async function refresh() {
-    setLoading(true); setError("");
+  async function refresh(options?: { silent?: boolean }) {
+    const silent = options?.silent ?? false;
+    if (!silent) { setLoading(true); setError(""); }
     try {
       const [response, recurringResponse] = await Promise.all([fetch(`/api/households/${householdId}`, { cache: "no-store" }), fetch(`/api/households/${householdId}/recurring`, { cache: "no-store" })]);
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Unable to load household");
       const recurringBody = recurringResponse.ok ? await recurringResponse.json() : { recurring: [] };
       setData({ ...body, recurring: recurringBody.recurring }); localStorage.setItem("fairshare-household", householdId);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to load household"); }
-    finally { setLoading(false); }
+    } catch (cause) { if (!silent) setError(cause instanceof Error ? cause.message : "Unable to load household"); }
+    finally { if (!silent) setLoading(false); }
   }
 
   async function mutate(path: string, method: string, body?: unknown) {
@@ -165,7 +179,7 @@ export function HouseholdApp() {
       {notificationsOpen && <div className="notification-panel"><div className="panel-title"><strong>Notifications</strong><span>{notifications.filter((item) => !item.readAt).length} new</span></div>{notifications.length ? notifications.slice(0, 8).map((item) => <button key={item.id}><span className="activity-icon mint"><Bell size={17} /></span><span><strong>{item.title}</strong><small>{item.body}</small></span></button>) : <p className="panel-empty">You’re all caught up.</p>}</div>}
     </header>
     <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1>{tab === "overview" && <button className="activity-link-button" onClick={() => setTab("activity")}><FileText size={16} /> Activity</button>}</div><p>{tab === "overview" ? "Here’s where everyone stands today." : tab === "bills" ? "Outstanding expenses and completed settlement history." : tab === "upcoming" ? "Scheduled household expenses and their next occurrence." : tab === "balances" ? "Open person-to-person obligations after repayments." : "Recent bills, settlements, closures, and payments."}</p></div>{tab !== "overview" && <div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div>}</div>
-      {error && <div className="error-banner">{error}<button onClick={refresh}>Try again</button></div>}
+      {error && <div className="error-banner">{error}<button onClick={() => void refresh()}>Try again</button></div>}
       {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} canConfirmPayment={Boolean(receivableBalances.length)} onBill={() => setModal("bill")} onPayment={() => openPayment()} onInvite={() => setModal("invite")} onBillDetail={openBill} /> : tab === "bills" ? <Bills data={data!} onBillDetail={openBill} /> : tab === "upcoming" ? <Upcoming data={data!} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <Balances data={data!} user={session!.user} onPayment={() => openPayment()} onNudge={sendNudge} onInvite={() => setModal("invite")} /> : <Activity data={data!} householdId={householdId} onBillDetail={openBill} />}
     </div></main>
     <nav className="bottom-nav">{(["overview", "bills"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}<button className="fab" onClick={() => setModal("bill")}><Plus size={24} /></button>{(["upcoming", "balances"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}</nav>
