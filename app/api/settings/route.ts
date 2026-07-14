@@ -6,13 +6,14 @@ import { apiRoute } from "@/lib/api";
 import { requireMutationUser, requireRequestUser } from "@/lib/auth";
 import { notificationPreferenceSchema, userSettingsSchema } from "@/lib/validation";
 import { ApiError, readJson } from "@/lib/http";
+import { configuredVapidPublicKey } from "@/lib/push-config";
 
 export async function GET(request: NextRequest) {
   return apiRoute(async () => {
     const user = await requireRequestUser(request);
     const [account] = await getDb().select({ displayName: users.displayName, email: users.email, themePreference: users.themePreference }).from(users).where(eq(users.id, user.id)).limit(1);
     const [preferences] = await getDb().select().from(notificationPreferences).where(eq(notificationPreferences.userId, user.id)).limit(1);
-    return { account, notifications: preferences, vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null };
+    return { account, notifications: preferences, vapidPublicKey: configuredVapidPublicKey() };
   });
 }
 

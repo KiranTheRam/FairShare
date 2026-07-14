@@ -16,6 +16,10 @@ export function SettingsClient() {
   const [theme, setTheme] = useState<ThemeId>("dark");
   const [preferences, setPreferences] = useState<NotificationPrefs>({ billsEnabled: true, paymentsEnabled: true, balanceChangesEnabled: true });
   const [vapidPublicKey, setVapidPublicKey] = useState<string | null>(null);
+  const [pushSupported, setPushSupported] = useState<boolean | null>(null);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission | null>(null);
   const [savedNote, setSavedNote] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -38,6 +42,29 @@ export function SettingsClient() {
   }, []);
 
   useEffect(() => { if (!savedNote) return; const timer = setTimeout(() => setSavedNote(""), 2600); return () => clearTimeout(timer); }, [savedNote]);
+
+  useEffect(() => {
+    if (!vapidPublicKey) return;
+    let cancelled = false;
+    async function syncPushState() {
+      await Promise.resolve();
+      if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+        if (!cancelled) setPushSupported(false);
+        return;
+      }
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        if (!cancelled) {
+          setPushSupported(true);
+          setPushPermission(Notification.permission);
+          setPushEnabled(Boolean(subscription));
+        }
+      } catch { if (!cancelled) setPushSupported(false); }
+    }
+    void syncPushState();
+    return () => { cancelled = true; };
+  }, [vapidPublicKey]);
 
   async function mutate(path: string, method: string, body?: unknown) {
     if (!session) throw new Error("Session is unavailable");
@@ -63,18 +90,36 @@ export function SettingsClient() {
   }
 
   async function enablePush() {
-    setError("");
+    if (!vapidPublicKey) throw new Error("Web Push is not configured on this server");
+    const permission = await Notification.requestPermission();
+    setPushPermission(permission);
+    if (permission !== "granted") throw new Error("Push permission is blocked. Allow notifications in your browser or device settings, then try again.");
+    const registration = await navigator.serviceWorker.ready;
+    const padding = "=".repeat((4 - vapidPublicKey.length % 4) % 4);
+    const bytes = Uint8Array.from(atob((vapidPublicKey + padding).replace(/-/g, "+").replace(/_/g, "/")), (character) => character.charCodeAt(0));
+    const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes });
+    await mutate("/api/settings/push", "POST", subscription.toJSON());
+    setPushEnabled(true);
+    setSavedNote("Push enabled on this device");
+  }
+
+  async function togglePush() {
+    setPushBusy(true); setError("");
     try {
-      if (!vapidPublicKey || !("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("Web Push is not configured on this server");
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") throw new Error("Notification permission was not granted");
-      const registration = await navigator.serviceWorker.ready;
-      const padding = "=".repeat((4 - vapidPublicKey.length % 4) % 4);
-      const bytes = Uint8Array.from(atob((vapidPublicKey + padding).replace(/-/g, "+").replace(/_/g, "/")), (character) => character.charCodeAt(0));
-      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes });
-      await mutate("/api/settings/push", "POST", subscription.toJSON());
-      setSavedNote("Push enabled on this device");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Push could not be enabled"); }
+      if (pushEnabled) {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) {
+          await mutate("/api/settings/push", "DELETE", { endpoint: subscription.endpoint });
+          await subscription.unsubscribe();
+        }
+        setPushEnabled(false);
+        setSavedNote("Push disabled on this device");
+      } else {
+        await enablePush();
+      }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Push settings could not be changed"); }
+    finally { setPushBusy(false); }
   }
 
   async function changePassword(event: React.FormEvent) {
@@ -123,7 +168,9 @@ export function SettingsClient() {
           <label><span><strong>Payments involving you</strong><small>Bill-specific and general repayments</small></span><input type="checkbox" checked={preferences.paymentsEnabled} onChange={() => void togglePreference("paymentsEnabled")} /></label>
           <label><span><strong>Balance changes</strong><small>Reminders and meaningful changes to what you owe or are owed</small></span><input type="checkbox" checked={preferences.balanceChangesEnabled} onChange={() => void togglePreference("balanceChangesEnabled")} /></label>
         </div>
-        <button className="secondary-button push-button" disabled={!vapidPublicKey} onClick={() => void enablePush()}>{vapidPublicKey ? "Enable push on this device" : "Web Push is not configured"}</button>
+        {!vapidPublicKey ? <div className="push-status"><strong>Push notifications need server setup</strong><p>The FairShare operator must generate VAPID keys, set <code>VAPID_SUBJECT</code>, <code>VAPID_PUBLIC_KEY</code>, and <code>VAPID_PRIVATE_KEY</code> in the deployment environment, then restart FairShare. This cannot be enabled from a user account.</p></div>
+          : pushSupported === false ? <div className="push-status"><strong>This browser cannot receive Web Push</strong><p>Use a supported browser. On iPhone or iPad, install FairShare to the Home Screen and open the installed app before enabling push.</p></div>
+          : <div className="notification-preferences push-preference"><label><span><strong>Push on this device</strong><small>{pushPermission === "denied" ? "Blocked in browser or device settings" : pushEnabled ? "Notifications can appear when FairShare is closed" : "Enable alerts from this browser or installed app"}</small></span><input type="checkbox" checked={pushEnabled} disabled={pushBusy || pushSupported !== true} onChange={() => void togglePush()} /></label></div>}
       </section>
 
       <section className="settings-section">
