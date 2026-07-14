@@ -36,7 +36,8 @@ FairShare is a self-hosted, mobile-first Progressive Web App for shared househol
 - Recurring bill templates with an idempotent hourly scheduler.
 - Dedicated Upcoming view for scheduled expenses and an auditable household Activity timeline.
 - In-app notifications and optional standards-based Web Push.
-- Neutral Dark by default, plus account-persisted Forest Green and Light themes in user settings.
+- A dedicated user settings page with account-persisted themes: Neutral Dark (default), Forest Green, Daylight, and Sunset.
+- Self-service password change that revokes every active session.
 - Installable PWA behavior and a responsive desktop/mobile interface.
 - PostgreSQL migrations, audit logs, login throttling, CSRF protection, and validated API inputs.
 - Hardened, non-root container and a complete PostgreSQL Docker Compose stack.
