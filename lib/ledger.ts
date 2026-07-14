@@ -80,7 +80,7 @@ export async function householdSnapshot(householdId: string) {
     db.select().from(bills).where(and(eq(bills.householdId, householdId), isNull(bills.deletedAt))).orderBy(desc(bills.createdAt)),
     db.select({ id: obligations.id, billId: obligations.billId, debtorUserId: obligations.debtorUserId, creditorUserId: obligations.creditorUserId, amountCents: obligations.originalAmountCents, billName: bills.name })
       .from(obligations).innerJoin(bills, eq(bills.id, obligations.billId)).where(and(eq(obligations.householdId, householdId), eq(obligations.active, true))),
-    db.select({ id: payments.id, billId: payments.billId, payerUserId: payments.payerUserId, recipientUserId: payments.recipientUserId, payerName: paymentPayer.displayName, recipientName: paymentRecipient.displayName, billName: bills.name, amountCents: payments.amountCents, note: payments.note, paidAt: payments.paidAt })
+    db.select({ id: payments.id, billId: payments.billId, payerUserId: payments.payerUserId, recipientUserId: payments.recipientUserId, createdByUserId: payments.createdByUserId, payerName: paymentPayer.displayName, recipientName: paymentRecipient.displayName, billName: bills.name, amountCents: payments.amountCents, note: payments.note, paidAt: payments.paidAt })
       .from(payments).innerJoin(paymentPayer, eq(paymentPayer.id, payments.payerUserId)).innerJoin(paymentRecipient, eq(paymentRecipient.id, payments.recipientUserId)).leftJoin(bills, eq(bills.id, payments.billId)).where(eq(payments.householdId, householdId)).orderBy(desc(payments.paidAt)),
     db.select({ id: billChangeHistory.id, billId: bills.id, billName: bills.name, actorName: closureActor.displayName, changedAt: billChangeHistory.changedAt })
       .from(billChangeHistory).innerJoin(bills, eq(bills.id, billChangeHistory.billId)).innerJoin(closureActor, eq(closureActor.id, billChangeHistory.changedByUserId)).where(and(eq(bills.householdId, householdId), eq(billChangeHistory.changeType, "closed_without_payment"))).orderBy(desc(billChangeHistory.changedAt)),
@@ -109,13 +109,13 @@ export async function householdSnapshot(householdId: string) {
     if (difference > 0) outstanding.set(key, { ...entry, amountCents: difference });
     else if (difference < 0) outstanding.set(reverseKey, { payerUserId: entry.recipientUserId, recipientUserId: entry.payerUserId, amountCents: -difference });
   }
-  const userIds = [...new Set([...outstanding.values()].flatMap((item) => [item.payerUserId, item.recipientUserId]))];
+  const userIds = [...new Set([...outstanding.values()].flatMap((item) => [item.payerUserId, item.recipientUserId]).concat(billRows.map((bill) => bill.createdByUserId), paymentRows.map((payment) => payment.createdByUserId)))];
   const names = userIds.length ? await db.select({ id: users.id, displayName: users.displayName }).from(users).where(inArray(users.id, userIds)) : [];
   const nameMap = new Map(names.map((item) => [item.id, item.displayName]));
   return {
-    bills: billRows,
+    bills: billRows.map((bill) => ({ ...bill, createdByName: nameMap.get(bill.createdByUserId) })),
     balances: [...outstanding.values()].filter((item) => item.amountCents > 0).map((item) => ({ ...item, payerName: nameMap.get(item.payerUserId), recipientName: nameMap.get(item.recipientUserId) })),
-    payments: paymentRows,
+    payments: paymentRows.map((payment) => ({ ...payment, actorName: nameMap.get(payment.createdByUserId) })),
     closures: closureRows,
   };
 }
