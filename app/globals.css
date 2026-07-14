@@ -277,6 +277,16 @@ a { color: inherit; text-decoration: none; }
 .activity-icon.yellow { background: var(--yellow-soft); color: #a67914; }
 .activity-icon.blue { background: var(--blue-soft); color: #436cad; }
 .activity-icon.violet { background: var(--violet-soft); color: #6c53a9; }
+.category-icon { border: 1px solid color-mix(in srgb, currentColor 18%, transparent); }
+.category-icon.category-housing { background: color-mix(in srgb, #5968c9 12%, var(--paper)); color: #5968c9; }
+.category-icon.category-utilities { background: color-mix(in srgb, #ad7900 13%, var(--paper)); color: #9b6d00; }
+.category-icon.category-groceries { background: color-mix(in srgb, #168492 12%, var(--paper)); color: #147582; }
+.category-icon.category-dining { background: color-mix(in srgb, #bd681f 12%, var(--paper)); color: #a95c1a; }
+.category-icon.category-transport { background: color-mix(in srgb, #3473c8 12%, var(--paper)); color: #3473c8; }
+.category-icon.category-subscriptions { background: color-mix(in srgb, #8a4fb1 12%, var(--paper)); color: #8149a6; }
+.category-icon.category-household { background: color-mix(in srgb, #8a6a3c 12%, var(--paper)); color: #7c5f35; }
+.category-icon.category-other { background: color-mix(in srgb, #65717c 12%, var(--paper)); color: #65717c; }
+.category-icon.mint { border-color: color-mix(in srgb, var(--teal) 18%, transparent); }
 .action-chip { padding: 6px 9px; border-radius: 8px; background: var(--yellow-soft); color: #86600d; font-size: 9.5px; font-weight: 750; }
 .recent-card { grid-column: 1 / -1; }
 .bill-list { display: grid; }
@@ -892,6 +902,8 @@ a { color: inherit; text-decoration: none; }
   .activity-view .page-toolbar { align-items: flex-start; flex-direction: column; }
   .activity-view .page-toolbar .secondary-button { width: 100%; }
   .relationship-grid { grid-template-columns: 1fr; }
+  .activity-view .timeline { margin-inline: -16px; }
+  .activity-view .timeline-item { padding-inline: 16px; }
   .timeline-item { grid-template-columns: 38px 1fr; }
   .timeline-item time { display: none; }
   .modal-backdrop { align-items: end; padding: 0; }
