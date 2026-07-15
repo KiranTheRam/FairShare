@@ -314,7 +314,7 @@ function SettleUp({ data, user, onPayment, onInvite }: { data: HouseholdData; us
         <span className="avatar-pair"><Avatar name={item.payerName ?? ""} /><Avatar name={item.recipientName ?? ""} /></span>
         <span className="settle-prow-text"><b>{item.payerUserId === user.id ? `You pay ${item.recipientName}` : item.recipientUserId === user.id ? `${item.payerName} pays you` : `${item.payerName} pays ${item.recipientName}`}</b><small>{planSubtitle(item)}</small></span>
         <span className="settle-prow-amt">{money(item.amountCents, currency)}</span>
-        {item.recipientUserId === user.id ? <button className="settle-confirm" onClick={() => onPayment(item)}>Got it? Confirm</button> : <span className="settle-wait">{`${item.recipientName} confirms`}</span>}
+        {item.recipientUserId === user.id ? <button className="settle-confirm" onClick={() => onPayment(item)}>Got it? Confirm</button> : <span className="settle-wait">{`waiting on ${item.recipientName}`}</span>}
       </div>)}
       {!data.simplifiedBalances.length && <p className="empty-copy">Nothing to settle — new bills will build a plan here.</p>}
     </div>
