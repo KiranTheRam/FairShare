@@ -383,7 +383,6 @@ function BillModal({ data, currentUserId, initial, close, save }: { data: Househ
   const [payerId, setPayerId] = useState(defaultPayer);
   const [included, setIncluded] = useState<string[]>(initial ? initial.allocations.map((item) => item.userId) : data.members.map((member) => member.id));
   const [allocationValues, setAllocationValues] = useState<Record<string, string>>(initialAllocations);
-  const [dueDate, setDueDate] = useState(initial?.bill.dueDate ? initial.bill.dueDate.slice(0, 10) : "");
   const [makeRecurring, setMakeRecurring] = useState(false);
   const [cadence, setCadence] = useState<Recurring["cadence"]>("monthly");
   const [nextDate, setNextDate] = useState("");
@@ -432,7 +431,7 @@ function BillModal({ data, currentUserId, initial, close, save }: { data: Househ
     else if (method === "fixed") allocations = includedMembers.map((member) => ({ userId: member.id, amountCents: Math.round(Number(allocationValues[member.id] || 0) * 100) })).filter((item) => item.amountCents > 0);
     else { const basis = includedMembers.map((member) => ({ userId: member.id, percentageBasisPoints: Math.round(Number(allocationValues[member.id] || 0) * 100) })).filter((item) => item.percentageBasisPoints > 0); let allocated = 0; allocations = basis.map((item, index) => { const amountForMember = index === basis.length - 1 ? amountCents - allocated : Math.round(amountCents * item.percentageBasisPoints / 10_000); allocated += amountForMember; return { userId: item.userId, amountCents: amountForMember, percentageBasisPoints: item.percentageBasisPoints }; }); }
     if (makeRecurring && !nextDate) { setError("Choose the next occurrence date"); return; }
-    const body = { name, category, amountCents, periodLabel: initial?.bill.periodLabel ?? new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }), dueDate: dueDate ? new Date(`${dueDate}T12:00:00Z`).toISOString() : null, amountState: estimated ? "estimated" : "final", allocationMethod: method, contributions, allocations, ...(initial ? { revision: initial.bill.revision } : {}) };
+    const body = { name, category, amountCents, periodLabel: initial?.bill.periodLabel ?? new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }), dueDate: initial?.bill.dueDate ?? null, amountState: estimated ? "estimated" : "final", allocationMethod: method, contributions, allocations, ...(initial ? { revision: initial.bill.revision } : {}) };
     const recurring = makeRecurring ? { name, category, expectedAmountCents: amountCents, cadence, nextOccurrence: new Date(`${nextDate}T12:00:00Z`).toISOString(), allocationMethod: method, contributions, allocations, active: true } : undefined;
     setBusy(true); setError(""); try { await save(body, recurring); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save bill"); setBusy(false); }
   }
@@ -451,11 +450,10 @@ function BillModal({ data, currentUserId, initial, close, save }: { data: Househ
       {isIn && method !== "equal" ? <input className="abill-share" inputMode="decimal" value={allocationValues[member.id] ?? ""} placeholder={method === "percentage" ? "%" : "0.00"} onChange={(e) => setAllocationValues({ ...allocationValues, [member.id]: e.target.value })} /> : <small>{isIn ? (amountCents ? money(equalShares[member.id] ?? 0, data.household.currency) : (member.id === currentUserId ? "You" : member.displayName.split(" ")[0])) : "out"}</small>}
     </span>; })}{method !== "equal" && <span className={`abill-progress${allocationComplete ? " ok" : ""}`}>{allocationComplete ? "✓ adds up" : allocationProgress}</span>}</div>
     <div className="abill-seg"><button type="button" className={method === "equal" ? "on" : ""} onClick={() => setMethod("equal")}>Equal</button><button type="button" className={method === "percentage" ? "on" : ""} onClick={() => setMethod("percentage")}>Percentage</button><button type="button" className={method === "fixed" ? "on" : ""} onClick={() => setMethod("fixed")}>Exact</button></div>
-    <div className="abill-extras">
-      <span>Due</span><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-      {!initial && <><span>Repeats</span><select value={makeRecurring ? cadence : "no"} onChange={(e) => { if (e.target.value === "no") setMakeRecurring(false); else { setMakeRecurring(true); setCadence(e.target.value as Recurring["cadence"]); } }}><option value="no">doesn&#39;t repeat</option><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="quarterly">quarterly</option><option value="yearly">yearly</option></select>
-      {makeRecurring && <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} aria-label="Next occurrence" />}</>}
-    </div>
+    {!initial && <div className="abill-extras">
+      <span>Repeats</span><select value={makeRecurring ? cadence : "no"} onChange={(e) => { if (e.target.value === "no") setMakeRecurring(false); else { setMakeRecurring(true); setCadence(e.target.value as Recurring["cadence"]); } }}><option value="no">doesn&#39;t repeat</option><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="quarterly">quarterly</option><option value="yearly">yearly</option></select>
+      {makeRecurring && <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} aria-label="Next occurrence" />}
+    </div>}
     {error && <p className="form-error">{error}</p>}
     <button className="abill-cta" disabled={busy || !allocationComplete}>{busy ? "Saving…" : `${initial ? "Save bill" : "Add bill"}${consequence ? ` — ${consequence}` : ""}`}</button>
   </form></Modal>;
