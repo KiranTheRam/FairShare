@@ -547,6 +547,32 @@ a { color: inherit; text-decoration: none; }
 .bd-txt { border: 0; background: transparent; color: var(--teal); font-weight: 750; font-size: 11px; cursor: pointer; padding: 6px 0; }
 .bd-txt.danger { color: var(--coral); }
 .bd-done { flex: 1; min-width: 120px; border: 0; border-radius: 13px; padding: 12px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 12.5px; cursor: pointer; }
+
+/* Payment popup (P2): payer pills, amount hero, quick chips */
+.pm { display: grid; gap: 13px; }
+.pm-lbl { color: var(--muted); font-size: 9.5px; font-weight: 800; letter-spacing: .08em; text-align: center; }
+.pm-pills { display: flex; gap: 12px; justify-content: center; }
+.pm-pill { display: grid; justify-items: center; gap: 4px; border: 0; background: transparent; padding: 0; cursor: pointer; }
+.pm-pill .avatar { width: 40px; height: 40px; font-size: 13px; }
+.pm-pill small { font-size: 9px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pm-pill.on .avatar { outline: 2.5px solid var(--teal); outline-offset: 2px; }
+.pm-pill.on small { color: var(--teal); }
+.pm-pill:disabled { cursor: default; }
+.pm-amount { display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 16px; background: var(--wash); padding: 8px 14px; }
+.pm-amount span { font-size: 22px; color: var(--muted); font-weight: 700; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.pm-amount input { width: 170px; border: 0; background: transparent; color: var(--ink); font-size: 34px; font-weight: 700; letter-spacing: -1.3px; outline: none; text-align: center; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.pm-amount:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--teal) 45%, transparent); }
+.pm-chips { display: flex; gap: 6px; justify-content: center; }
+.pm-chips button { border: 0; border-radius: 99px; padding: 7px 13px; background: var(--wash); color: var(--ink-soft); font-size: 10.5px; font-weight: 750; cursor: pointer; font-variant-numeric: tabular-nums; }
+.pm-chips button.on { background: var(--mint); color: var(--teal); }
+.pm-conseq { margin: 0; text-align: center; font-size: 11px; font-weight: 700; }
+.pm-conseq.full { color: var(--teal); }
+.pm-conseq.part { color: var(--coral); }
+.pm-note { width: 100%; height: 38px; border: 0; border-radius: 12px; background: var(--wash); color: var(--ink); padding: 0 12px; font-size: 12px; outline: none; }
+.pm-note::placeholder { color: var(--muted); }
+.pm-cta { border: 0; border-radius: 14px; padding: 13px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 13px; cursor: pointer; }
+.pm-cta:disabled { opacity: .5; cursor: default; }
+.pm-cancel { border: 0; background: transparent; color: var(--muted); font-weight: 700; font-size: 11.5px; cursor: pointer; }
 .bill-line { width: 100%; display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .bill-line-text strong { display: block; font-size: 12.5px; letter-spacing: -.2px; color: var(--ink); }
 .bill-line-text small { color: var(--muted); font-size: 10px; }
