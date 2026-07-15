@@ -573,6 +573,16 @@ a { color: inherit; text-decoration: none; }
 .pm-cta { border: 0; border-radius: 14px; padding: 13px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 13px; cursor: pointer; }
 .pm-cta:disabled { opacity: .5; cursor: default; }
 .pm-cancel { border: 0; background: transparent; color: var(--muted); font-weight: 700; font-size: 11.5px; cursor: pointer; }
+
+/* Mark as sent: pending tags and the creditor's claim card */
+.glance-claimhint { color: var(--muted); font-size: 10.5px; align-self: center; }
+.glance-pendtag { display: inline-flex; align-items: center; gap: 6px; border-radius: 99px; padding: 6px 11px; background: color-mix(in srgb, var(--teal) 14%, var(--canvas)); color: var(--teal); font-size: 10px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.glance-pendtag i { font-style: normal; width: 7px; height: 7px; border-radius: 50%; background: var(--teal); }
+.glance-remind.danger { color: var(--coral); }
+.glance-claim { display: grid; gap: 11px; border-radius: 22px; padding: 15px 17px; background: color-mix(in srgb, var(--teal) 12%, var(--canvas)); border: 1px solid color-mix(in srgb, var(--teal) 30%, transparent); }
+.glance-claim-top { display: flex; align-items: center; gap: 12px; }
+.glance-claim-top .avatar { width: 38px; height: 38px; font-size: 12px; }
+.glance-amt.claim { color: var(--teal); }
 .bill-line { width: 100%; display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .bill-line-text strong { display: block; font-size: 12.5px; letter-spacing: -.2px; color: var(--ink); }
 .bill-line-text small { color: var(--muted); font-size: 10px; }

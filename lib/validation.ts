@@ -39,5 +39,7 @@ export const pushSubscriptionSchema = z.object({ endpoint: z.string().url().max(
 export const userSettingsSchema = z.object({ displayName: z.string().trim().min(2).max(100).optional(), themePreference: z.enum(["dark", "forest", "light", "sunset"]).optional() });
 export const passwordChangeSchema = z.object({ currentPassword: z.string().min(1).max(128), newPassword: password });
 export const commentSchema = z.object({ body: z.string().trim().min(1).max(1_000) });
+export const claimSchema = z.object({ creditorUserId: uuid, amountCents: money.positive(), note: z.string().trim().max(500).optional() });
+export const claimUpdateSchema = z.object({ amountCents: money.positive().optional(), note: z.string().trim().max(500).optional() });
 export const nudgeSchema = z.object({ debtorUserId: uuid });
 export const inviteAcceptSchema = z.object({ email, displayName: z.string().trim().min(2).max(100), password });

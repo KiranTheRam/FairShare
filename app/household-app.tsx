@@ -8,7 +8,7 @@ import { isThemeId } from "@/lib/themes";
 
 type Tab = "overview" | "bills" | "balances" | "activity";
 const TAB_LABELS: Record<Tab, string> = { overview: "Overview", bills: "Bills", balances: "Settle up", activity: "Activity" };
-type ModalName = "bill" | "edit" | "payment" | "recurring-edit" | "detail" | "invite" | null;
+type ModalName = "bill" | "edit" | "payment" | "recurring-edit" | "detail" | "invite" | "claim" | null;
 type User = { id: string; email: string; displayName: string; role: "member" | "administrator" };
 type HouseholdListItem = { id: string; name: string; currency: string };
 type Member = { id: string; displayName: string; email: string };
@@ -17,8 +17,9 @@ type BalanceComponent = { billId: string; billName: string; category: BillCatego
 type Balance = { payerUserId: string; recipientUserId: string; payerName?: string; recipientName?: string; amountCents: number; components?: BalanceComponent[] };
 type Payment = { id: string; billId?: string | null; payerUserId: string; recipientUserId: string; payerName?: string; recipientName?: string; actorName?: string; billName?: string | null; amountCents: number; note?: string | null; paidAt: string };
 type Closure = { id: string; billId: string; billName: string; actorName: string; changedAt: string };
+type Claim = { id: string; debtorUserId: string; creditorUserId: string; debtorName?: string; creditorName?: string; amountCents: number; note?: string | null; createdAt: string };
 type Recurring = { id: string; name: string; category: BillCategory; expectedAmountCents: number | null; cadence: "weekly" | "monthly" | "quarterly" | "yearly"; nextOccurrence: string; allocationMethod: "equal" | "percentage" | "fixed"; templateConfig: { contributions: Array<{ userId: string; amountCents: number }>; allocations: Array<{ userId: string; amountCents: number; percentageBasisPoints?: number }> }; active: boolean };
-type HouseholdData = { household: HouseholdListItem & { timezone: string }; members: Member[]; bills: Bill[]; balances: Balance[]; simplifiedBalances: Balance[]; payments: Payment[]; closures: Closure[]; recurring: Recurring[] };
+type HouseholdData = { household: HouseholdListItem & { timezone: string }; members: Member[]; bills: Bill[]; balances: Balance[]; simplifiedBalances: Balance[]; payments: Payment[]; closures: Closure[]; claims: Claim[]; recurring: Recurring[] };
 type SessionData = { user: User; csrfToken: string; households: HouseholdListItem[] };
 type NotificationItem = { id: string; title: string; body: string; readAt: string | null; createdAt: string };
 type BillComment = { id: string; authorUserId: string; authorName: string; body: string; createdAt: string };
@@ -44,8 +45,9 @@ export function HouseholdApp() {
   const [error, setError] = useState("");
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
   const [billDetail, setBillDetail] = useState<BillDetailData | null>(null);
-  const [paymentContext, setPaymentContext] = useState<(Balance & { billId?: string | null; billName?: string }) | null>(null);
+  const [paymentContext, setPaymentContext] = useState<(Balance & { billId?: string | null; billName?: string; note?: string }) | null>(null);
   const [selectedRecurring, setSelectedRecurring] = useState<Recurring | null>(null);
+  const [claimContext, setClaimContext] = useState<{ balance: Balance; existing?: Claim } | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = "dark";
@@ -109,7 +111,7 @@ export function HouseholdApp() {
     setBillDetail(body); setModal("detail");
   }
 
-  function openPayment(context: (Balance & { billId?: string | null; billName?: string }) | null = null) { setPaymentContext(context); setModal("payment"); }
+  function openPayment(context: (Balance & { billId?: string | null; billName?: string; note?: string }) | null = null) { setPaymentContext(context); setModal("payment"); }
 
   async function addComment(billId: string, body: string) {
     await mutate(`/api/households/${householdId}/bills/${billId}/comments`, "POST", { body });
@@ -129,6 +131,20 @@ export function HouseholdApp() {
   async function removeAttachment(billId: string, attachmentId: string) {
     await mutate(`/api/households/${householdId}/bills/${billId}/attachments/${attachmentId}`, "DELETE");
     await openBill(billId);
+  }
+
+  function openClaim(balance: Balance, existing?: Claim) { setClaimContext({ balance, existing }); setModal("claim"); }
+
+  async function cancelClaim(claim: Claim) {
+    if (!confirm("Cancel this claim? Your balance is unchanged either way.")) return;
+    try { await mutate(`/api/households/${householdId}/claims/${claim.id}`, "DELETE"); setToast("Claim cancelled."); await refresh(); }
+    catch (cause) { setToast(cause instanceof Error ? cause.message : "The claim could not be cancelled"); }
+  }
+
+  async function dismissClaim(claim: Claim) {
+    if (!confirm(`Dismiss ${claim.debtorName ?? "this member"}’s claim? They’ll be told you didn’t receive it, and the balance stays open.`)) return;
+    try { await mutate(`/api/households/${householdId}/claims/${claim.id}`, "DELETE"); setToast("Claim dismissed — the balance stays open."); await refresh(); }
+    catch (cause) { setToast(cause instanceof Error ? cause.message : "The claim could not be dismissed"); }
   }
 
   async function sendNudge(debtor: Balance) {
@@ -170,11 +186,12 @@ export function HouseholdApp() {
     </header>
     <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1></div><p>{tab === "overview" ? "Here’s where everyone stands today." : tab === "bills" ? "Outstanding, settled, and scheduled household expenses." : tab === "balances" ? "Everyone’s position and the fewest payments to clear it." : "Recent bills, settlements, closures, and payments."}</p></div><div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div></div>
       {error && <div className="error-banner">{error}<button onClick={refresh}>Try again</button></div>}
-      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onPayment={(context) => openPayment(context ?? null)} onNudge={sendNudge} onBillDetail={openBill} onOpenBills={() => setTab("bills")} /> : tab === "bills" ? <Bills data={data!} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <SettleUp data={data!} user={session!.user} onPayment={(context) => openPayment(context ?? null)} onInvite={() => setModal("invite")} /> : <Activity data={data!} user={session!.user} householdId={householdId} onBillDetail={openBill} />}
+      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onPayment={(context) => openPayment(context ?? null)} onNudge={sendNudge} onClaim={(balance) => openClaim(balance)} onEditClaim={(balance, existing) => openClaim(balance, existing)} onCancelClaim={cancelClaim} onDismissClaim={dismissClaim} onBillDetail={openBill} onOpenBills={() => setTab("bills")} /> : tab === "bills" ? <Bills data={data!} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <SettleUp data={data!} user={session!.user} onPayment={(context) => openPayment(context ?? null)} onInvite={() => setModal("invite")} /> : <Activity data={data!} user={session!.user} householdId={householdId} onBillDetail={openBill} />}
     </div></main>
     <nav className="bottom-nav">{(["overview", "bills"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}<button className="fab" onClick={() => setModal("bill")}><Plus size={24} /></button>{(["balances", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}</nav>
     {modal === "bill" && data && <BillModal data={data} currentUserId={session?.user.id} close={() => setModal(null)} save={async (body, recurring) => { await mutate(`/api/households/${householdId}/bills`, "POST", { ...(body as object), ...(recurring ? { recurring } : {}) }); setModal(null); setToast(recurring ? "Bill and recurring schedule added." : "Bill added to the household ledger."); setAddAnother(true); await refresh(); }} />}
     {modal === "edit" && data && billDetail && <BillModal data={data} currentUserId={session?.user.id} initial={billDetail} close={() => setModal("detail")} save={async (body) => { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "PATCH", body); setModal(null); setToast("Bill updated and balances recalculated."); await refresh(); }} />}
+    {modal === "claim" && data && claimContext && <ClaimModal balance={claimContext.balance} existing={claimContext.existing} currency={data.household.currency} close={() => { setModal(null); setClaimContext(null); }} save={async (body) => { if (claimContext.existing) await mutate(`/api/households/${householdId}/claims/${claimContext.existing.id}`, "PATCH", body); else await mutate(`/api/households/${householdId}/claims`, "POST", body); setModal(null); setClaimContext(null); setToast(claimContext.existing ? "Claim updated." : `${claimContext.balance.recipientName} will be asked to confirm.`); await refresh(); }} />}
     {modal === "payment" && data && <PaymentModal data={data} currentUserId={session?.user.id ?? ""} specific={paymentContext} close={() => { setModal(null); setPaymentContext(null); }} save={async (body) => { await mutate(`/api/households/${householdId}/payments`, "POST", body); setModal(null); setPaymentContext(null); setToast("Payment confirmed."); await refresh(); }} />}
     {modal === "recurring-edit" && data && selectedRecurring && <RecurringModal data={data} initial={selectedRecurring} close={() => setModal(null)} save={async (body) => { await mutate(`/api/households/${householdId}/recurring/${selectedRecurring.id}`, "PATCH", body); setModal(null); setSelectedRecurring(null); setToast("Future recurring bills will use the updated schedule."); await refresh(); }} />}
     {modal === "invite" && data && <InviteModal householdName={data.household.name} householdId={householdId} mutate={mutate} close={() => setModal(null)} />}
@@ -197,18 +214,20 @@ const CATEGORY_ICONS = {
 
 function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "overview" ? LayoutDashboard : item === "bills" ? ReceiptText : item === "balances" ? WalletCards : FileText; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{item === "overview" ? "Home" : TAB_LABELS[item]}</small></button>; }
 
-function BalanceCard({ item, currency, mine, direction, onOpen, onConfirm, onNudge, onBillDetail }: { item: Balance; currency: string; mine: boolean; direction: "in" | "out" | "other"; onOpen: () => void; onConfirm: (item: Balance) => void; onNudge: (item: Balance) => void; onBillDetail: (id: string) => void }) {
+function BalanceCard({ item, currency, mine, direction, pendingClaim, onOpen, onConfirm, onNudge, onClaim, onEditClaim, onCancelClaim, onBillDetail }: { item: Balance; currency: string; mine: boolean; direction: "in" | "out" | "other"; pendingClaim?: Claim; onOpen: () => void; onConfirm: (item: Balance) => void; onNudge: (item: Balance) => void; onClaim: (item: Balance) => void; onEditClaim: (item: Balance, claim: Claim) => void; onCancelClaim: (claim: Claim) => void; onBillDetail: (id: string) => void }) {
   const components = item.components ?? [];
   const title = direction === "in" ? item.payerName : direction === "out" ? `You owe ${item.recipientName}` : `${item.payerName} → ${item.recipientName}`;
   return <section className={`glance-card glance-tappable${mine ? "" : " glance-other"}`} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" && event.target === event.currentTarget) onOpen(); }}>
-    <div className="glance-card-top">{direction === "other" ? <div className="avatar-pair"><Avatar name={item.payerName ?? ""} /><Avatar name={item.recipientName ?? ""} /></div> : <Avatar name={(direction === "in" ? item.payerName : item.recipientName) ?? ""} />}<span className="glance-who"><strong>{title}</strong><small>{direction === "out" ? "Awaiting their confirmation" : `${components.length || "No"} bill${components.length === 1 ? "" : "s"} open`}</small></span><span className="glance-amt">{money(item.amountCents, currency)}</span></div>
+    <div className="glance-card-top">{direction === "other" ? <div className="avatar-pair"><Avatar name={item.payerName ?? ""} /><Avatar name={item.recipientName ?? ""} /></div> : <Avatar name={(direction === "in" ? item.payerName : item.recipientName) ?? ""} />}<span className="glance-who"><strong>{title}</strong><small>{direction === "out" ? (pendingClaim ? "You said you paid — waiting on them" : "Awaiting their confirmation") : `${components.length || "No"} bill${components.length === 1 ? "" : "s"} open`}</small></span><span className="glance-amt">{money(item.amountCents, currency)}</span></div>
     {components.length > 0 && <div className="glance-breakdown">{components.map((component) => <i key={component.billId} className={`glance-seg category-${component.category}`} style={{ width: `${Math.max((component.amountCents / item.amountCents) * 100, 3)}%` }} title={`${component.billName} — ${money(component.amountCents, currency)}`} />)}</div>}
     {components.length > 0 && <div className="glance-keys">{components.map((component) => <button key={component.billId} onClick={(event) => { event.stopPropagation(); onBillDetail(component.billId); }}><i className={`category-${component.category}`} />{component.billName} <b>{money(component.amountCents, currency)}</b></button>)}</div>}
     {direction === "in" && <div className="glance-actions"><button className="glance-confirm" onClick={(event) => { event.stopPropagation(); onConfirm(item); }}>Confirm payment</button><button className="glance-remind" onClick={(event) => { event.stopPropagation(); void onNudge(item); }}><BellRing size={14} /> Remind</button></div>}
+    {direction === "out" && !pendingClaim && <div className="glance-actions"><button className="glance-confirm" onClick={(event) => { event.stopPropagation(); onClaim(item); }}>I paid this</button><span className="glance-claimhint">then {item.recipientName} confirms</span></div>}
+    {direction === "out" && pendingClaim && <div className="glance-actions"><span className="glance-pendtag"><i />you said you paid {money(pendingClaim.amountCents, currency)} · waiting on {item.recipientName}</span><button className="glance-remind" onClick={(event) => { event.stopPropagation(); onEditClaim(item, pendingClaim); }}>Edit</button><button className="glance-remind danger" onClick={(event) => { event.stopPropagation(); void onCancelClaim(pendingClaim); }}>Cancel</button></div>}
   </section>;
 }
 
-function Overview({ data, user, net, onPayment, onNudge, onBillDetail, onOpenBills }: { data: HouseholdData; user: User; net: number; onPayment: (context?: Balance) => void; onNudge: (item: Balance) => void; onBillDetail: (id: string) => void; onOpenBills: () => void }) {
+function Overview({ data, user, net, onPayment, onNudge, onClaim, onEditClaim, onCancelClaim, onDismissClaim, onBillDetail, onOpenBills }: { data: HouseholdData; user: User; net: number; onPayment: (context?: Balance & { note?: string }) => void; onNudge: (item: Balance) => void; onClaim: (item: Balance) => void; onEditClaim: (item: Balance, claim: Claim) => void; onCancelClaim: (claim: Claim) => void; onDismissClaim: (claim: Claim) => void; onBillDetail: (id: string) => void; onOpenBills: () => void }) {
   const currency = data.household.currency;
   const owedToMe = data.balances.filter((item) => item.recipientUserId === user.id);
   const iOwe = data.balances.filter((item) => item.payerUserId === user.id);
@@ -219,6 +238,8 @@ function Overview({ data, user, net, onPayment, onNudge, onBillDetail, onOpenBil
   const recentReceipts = data.payments.filter((payment) => payment.recipientUserId === user.id && new Date(payment.paidAt).getTime() > dayAgo);
   const receiptTotal = recentReceipts.reduce((sum, payment) => sum + payment.amountCents, 0);
   const latestReceipt = recentReceipts[0];
+  const claimsForMe = data.claims.filter((claim) => claim.creditorUserId === user.id);
+  const claimFor = (recipientUserId: string) => data.claims.find((claim) => claim.debtorUserId === user.id && claim.creditorUserId === recipientUserId);
   const nextRecurring = data.recurring.filter((item) => item.active).sort((a, b) => +new Date(a.nextOccurrence) - +new Date(b.nextOccurrence))[0];
   const nextDue = nextRecurring ? new Date(nextRecurring.nextOccurrence) : null;
   return <div className="glance-grid">
@@ -230,10 +251,14 @@ function Overview({ data, user, net, onPayment, onNudge, onBillDetail, onOpenBil
       {nextRecurring && nextDue && <section className="glance-due glance-tappable" role="button" tabIndex={0} onClick={onOpenBills} onKeyDown={(event) => { if (event.key === "Enter") onOpenBills(); }}><span className="glance-when">{nextDue.toLocaleDateString(undefined, { month: "short" }).toUpperCase()} {nextDue.getDate()}</span><span className="glance-due-what"><strong>{nextRecurring.name}</strong><small>recurring · splits {nextRecurring.templateConfig.allocations.length} way{nextRecurring.templateConfig.allocations.length === 1 ? "" : "s"}</small></span><strong className="glance-due-amt">{nextRecurring.expectedAmountCents === null ? "varies" : money(nextRecurring.expectedAmountCents, currency)}</strong></section>}
     </div>
     <div className="glance-col">
+      {claimsForMe.map((claim) => <section className="glance-claim" key={claim.id}>
+        <div className="glance-claim-top"><Avatar name={claim.debtorName ?? ""} /><span className="glance-who"><strong>{claim.debtorName} says they paid you</strong><small>{claim.note ? `“${claim.note}” · ` : ""}{new Date(claim.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</small></span><span className="glance-amt claim">{money(claim.amountCents, currency)}</span></div>
+        <div className="glance-actions"><button className="glance-confirm" onClick={() => { const balance = data.balances.find((item) => item.payerUserId === claim.debtorUserId && item.recipientUserId === user.id); if (balance) onPayment({ ...balance, amountCents: Math.min(claim.amountCents, balance.amountCents), note: claim.note ?? undefined }); }}>Confirm received</button><button className="glance-remind danger" onClick={() => void onDismissClaim(claim)}>I didn’t get this</button></div>
+      </section>)}
       {data.balances.length > 0 && <div className="glance-zone">
-        {owedToMe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="in" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
-        {iOwe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="out" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
-        {others.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine={false} direction="other" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
+        {owedToMe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="in" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onClaim={onClaim} onEditClaim={onEditClaim} onCancelClaim={onCancelClaim} onBillDetail={onBillDetail} />)}
+        {iOwe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="out" pendingClaim={claimFor(item.recipientUserId)} onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onClaim={onClaim} onEditClaim={onEditClaim} onCancelClaim={onCancelClaim} onBillDetail={onBillDetail} />)}
+        {others.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine={false} direction="other" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onClaim={onClaim} onEditClaim={onEditClaim} onCancelClaim={onCancelClaim} onBillDetail={onBillDetail} />)}
       </div>}
       {!data.balances.length && <section className="glance-card glance-settled"><Check size={26} /><strong>Everyone is settled up</strong><small>New bills will appear here as balances open.</small></section>}
     </div>
@@ -458,7 +483,33 @@ function BillModal({ data, currentUserId, initial, close, save }: { data: Househ
   </form></Modal>;
 }
 
-function PaymentModal({ data, currentUserId, specific, close, save }: { data: HouseholdData; currentUserId: string; specific: (Balance & { billId?: string | null; billName?: string }) | null; close: () => void; save: (body: unknown) => Promise<void> }) {
+function ClaimModal({ balance, existing, currency, close, save }: { balance: Balance; existing?: Claim; currency: string; close: () => void; save: (body: { creditorUserId?: string; amountCents: number; note?: string }) => Promise<void> }) {
+  const maxCents = balance.amountCents;
+  const [amount, setAmount] = useState(((existing?.amountCents ?? maxCents) / 100).toFixed(2));
+  const [note, setNote] = useState(existing?.note ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const amountCents = Math.round(Number(amount || 0) * 100);
+  const halfCents = Math.round(maxCents / 2);
+  const chip = amountCents === maxCents ? "all" : amountCents === halfCents ? "half" : "custom";
+  const overMax = amountCents > maxCents;
+  async function submit(event: React.FormEvent) {
+    event.preventDefault(); if (!amountCents || overMax) return;
+    setBusy(true); setError("");
+    try { await save({ ...(existing ? {} : { creditorUserId: balance.recipientUserId }), amountCents, ...(note.trim() ? { note: note.trim() } : {}) }); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "The claim could not be sent"); setBusy(false); }
+  }
+  return <Modal title={`Tell ${balance.recipientName ?? "them"} you paid`} subtitle="This doesn’t change any balances — they still confirm" close={close}><form className="pm" onSubmit={submit}>
+    <label className="pm-amount"><span>$</span><input type="number" inputMode="decimal" min="0.01" max={(maxCents / 100).toFixed(2)} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus /></label>
+    <div className="pm-chips"><button type="button" className={chip === "all" ? "on" : ""} onClick={() => setAmount((maxCents / 100).toFixed(2))}>All {money(maxCents, currency)}</button><button type="button" className={chip === "half" ? "on" : ""} onClick={() => setAmount((halfCents / 100).toFixed(2))}>Half</button><button type="button" className={chip === "custom" ? "on" : ""} onClick={() => setAmount("")}>Custom</button></div>
+    {overMax && <p className="pm-conseq part">more than you owe — max {money(maxCents, currency)}</p>}
+    <input className="pm-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Note (optional) — e.g. Venmo just now" />
+    {error && <p className="form-error">{error}</p>}
+    <button className="pm-cta" disabled={busy || !amountCents || overMax}>{busy ? "Sending…" : existing ? "Update claim" : "Mark as sent"}</button>
+    <button type="button" className="pm-cancel" onClick={close}>Cancel</button>
+  </form></Modal>; }
+
+function PaymentModal({ data, currentUserId, specific, close, save }: { data: HouseholdData; currentUserId: string; specific: (Balance & { billId?: string | null; billName?: string; note?: string }) | null; close: () => void; save: (body: unknown) => Promise<void> }) {
   const billLocked = Boolean(specific?.billId);
   const choices = billLocked && specific ? [specific] : data.balances.filter((item) => item.recipientUserId === currentUserId);
   const initialIndex = specific && !billLocked ? Math.max(choices.findIndex((item) => item.payerUserId === specific.payerUserId), 0) : 0;
@@ -466,7 +517,7 @@ function PaymentModal({ data, currentUserId, specific, close, save }: { data: Ho
   const balance = choices[index];
   const maxCents = specific && billLocked ? specific.amountCents : balance?.amountCents ?? 0;
   const [amount, setAmount] = useState(maxCents ? (maxCents / 100).toFixed(2) : "");
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(specific?.note ?? "");
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

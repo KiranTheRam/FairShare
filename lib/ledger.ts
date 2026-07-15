@@ -2,7 +2,7 @@ import "server-only";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb } from "@/db";
-import { billAllocations, billChangeHistory, billContributions, bills, obligations, payments, recurringBillTemplates, users } from "@/db/schema";
+import { billAllocations, billChangeHistory, billContributions, bills, obligations, paymentClaims, payments, recurringBillTemplates, users } from "@/db/schema";
 import { ApiError } from "./http";
 import { validateMemberIds } from "./access";
 import type { z } from "zod";
@@ -76,7 +76,7 @@ export async function updateBill(billId: string, householdId: string, actorUserI
 
 export async function householdSnapshot(householdId: string) {
   const db = getDb();
-  const [billRows, obligationRows, paymentRows, closureRows] = await Promise.all([
+  const [billRows, obligationRows, paymentRows, closureRows, claimRows] = await Promise.all([
     db.select().from(bills).where(and(eq(bills.householdId, householdId), isNull(bills.deletedAt))).orderBy(desc(bills.createdAt)),
     db.select({ id: obligations.id, billId: obligations.billId, debtorUserId: obligations.debtorUserId, creditorUserId: obligations.creditorUserId, amountCents: obligations.originalAmountCents, billName: bills.name, billCategory: bills.category })
       .from(obligations).innerJoin(bills, eq(bills.id, obligations.billId)).where(and(eq(obligations.householdId, householdId), eq(obligations.active, true))),
@@ -84,6 +84,7 @@ export async function householdSnapshot(householdId: string) {
       .from(payments).innerJoin(paymentPayer, eq(paymentPayer.id, payments.payerUserId)).innerJoin(paymentRecipient, eq(paymentRecipient.id, payments.recipientUserId)).leftJoin(bills, eq(bills.id, payments.billId)).where(eq(payments.householdId, householdId)).orderBy(desc(payments.paidAt)),
     db.select({ id: billChangeHistory.id, billId: bills.id, billName: bills.name, actorName: closureActor.displayName, changedAt: billChangeHistory.changedAt })
       .from(billChangeHistory).innerJoin(bills, eq(bills.id, billChangeHistory.billId)).innerJoin(closureActor, eq(closureActor.id, billChangeHistory.changedByUserId)).where(and(eq(bills.householdId, householdId), eq(billChangeHistory.changeType, "closed_without_payment"))).orderBy(desc(billChangeHistory.changedAt)),
+    db.select().from(paymentClaims).where(and(eq(paymentClaims.householdId, householdId), eq(paymentClaims.status, "pending"))).orderBy(desc(paymentClaims.createdAt)),
   ]);
   const directional = new Map<string, { payerUserId: string; recipientUserId: string; amountCents: number }>();
   for (const item of obligationRows) {
@@ -134,7 +135,7 @@ export async function householdSnapshot(householdId: string) {
     return items.filter((item) => item.amountCents > 0);
   };
   const simplified = simplifyBalances(balances).map((item) => ({ payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, amountCents: item.amountCents }));
-  const userIds = [...new Set(balances.concat(simplified).flatMap((item) => [item.payerUserId, item.recipientUserId]).concat(billRows.map((bill) => bill.createdByUserId), paymentRows.map((payment) => payment.createdByUserId)))];
+  const userIds = [...new Set(balances.concat(simplified).flatMap((item) => [item.payerUserId, item.recipientUserId]).concat(billRows.map((bill) => bill.createdByUserId), paymentRows.map((payment) => payment.createdByUserId), claimRows.flatMap((claim) => [claim.debtorUserId, claim.creditorUserId])))];
   const names = userIds.length ? await db.select({ id: users.id, displayName: users.displayName }).from(users).where(inArray(users.id, userIds)) : [];
   const nameMap = new Map(names.map((item) => [item.id, item.displayName]));
   return {
@@ -143,6 +144,7 @@ export async function householdSnapshot(householdId: string) {
     simplifiedBalances: simplified.map((item) => ({ ...item, payerName: nameMap.get(item.payerUserId), recipientName: nameMap.get(item.recipientUserId) })),
     payments: paymentRows.map((payment) => ({ ...payment, actorName: nameMap.get(payment.createdByUserId) })),
     closures: closureRows,
+    claims: claimRows.map((claim) => ({ id: claim.id, debtorUserId: claim.debtorUserId, creditorUserId: claim.creditorUserId, debtorName: nameMap.get(claim.debtorUserId), creditorName: nameMap.get(claim.creditorUserId), amountCents: claim.amountCents, note: claim.note, createdAt: claim.createdAt })),
   };
 }
 
