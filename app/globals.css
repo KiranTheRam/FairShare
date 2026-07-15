@@ -492,6 +492,61 @@ a { color: inherit; text-decoration: none; }
 .abill-cta { border: 0; border-radius: 14px; padding: 13px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 13px; cursor: pointer; }
 .abill-cta:disabled { opacity: .5; cursor: default; }
 .toast-action { margin-left: 10px; border: 0; border-radius: 99px; padding: 5px 12px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 10.5px; cursor: pointer; }
+
+/* Bill detail (D2): people rows, settled bar, collapsed history */
+.bd { display: grid; gap: 12px; }
+.bd-head { display: flex; align-items: center; gap: 12px; }
+.bd-glyph { display: grid; place-items: center; }
+.bd-amt { margin-left: auto; text-align: right; display: grid; }
+.bd-amt b { font-size: 25px; font-weight: 700; letter-spacing: -.8px; color: var(--coral); font-variant-numeric: tabular-nums; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.bd-amt small { font-size: 8.5px; font-weight: 800; letter-spacing: .05em; color: var(--coral); }
+.bd-amt.done b, .bd-amt.done small { color: var(--teal); }
+.bd-bar { display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; background: var(--wash); }
+.bd-bar i { font-style: normal; }
+.bd-bar .done { background: var(--teal); }
+.bd-bar .open { background: color-mix(in srgb, var(--coral) 55%, var(--wash)); }
+.bd-barlbl { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.bd-band { border-radius: 18px; background: var(--wash); padding: 13px 15px 10px; display: grid; }
+.bd-bh { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+.bd-bh strong { font-size: 13px; letter-spacing: -.2px; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.bd-bh small { color: var(--muted); font-size: 10px; }
+.bd-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; padding: 9px 0; }
+.bd-row + .bd-row { border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
+.bd-row .avatar { width: 30px; height: 30px; font-size: 10px; }
+.bd-t b { display: block; font-size: 11.5px; }
+.bd-t small { color: var(--muted); font-size: 9.5px; }
+.bd-ramt { font-weight: 700; font-size: 13px; color: var(--coral); font-variant-numeric: tabular-nums; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.bd-ramt.done { color: var(--teal); }
+.bd-wait { color: var(--muted); font-size: 9.5px; font-weight: 700; }
+.bd-wait.done { color: var(--teal); }
+.bd-acts { display: flex; gap: 5px; }
+.bd-confirm { border: 0; border-radius: 99px; padding: 6px 11px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 10px; cursor: pointer; }
+.bd-ghost { border: 0; border-radius: 99px; padding: 6px 9px; background: transparent; color: var(--teal); font-weight: 750; font-size: 10px; cursor: pointer; }
+.bd-file { display: flex; align-items: center; gap: 9px; padding: 7px 0; color: var(--muted); }
+.bd-file a { flex: 1; display: grid; color: inherit; }
+.bd-file a b { color: var(--ink); font-size: 11px; }
+.bd-file a small { font-size: 9.5px; }
+.bd-attach { display: inline-flex; align-items: center; gap: 7px; width: fit-content; border: 1px dashed color-mix(in srgb, var(--ink) 20%, transparent); border-radius: 10px; padding: 8px 13px; color: var(--teal); font-size: 10.5px; font-weight: 750; cursor: pointer; margin: 6px 0; }
+.bd-attach.busy { opacity: .6; }
+.bd-comment { display: flex; gap: 9px; align-items: start; padding: 7px 0; }
+.bd-comment .avatar { width: 24px; height: 24px; font-size: 8px; }
+.bd-comment b { font-size: 10.5px; margin-right: 5px; }
+.bd-comment time { color: var(--muted); font-size: 9px; }
+.bd-comment p { margin: 1px 0 0; font-size: 11px; color: var(--ink-soft); }
+.bd-cinput { display: flex; gap: 7px; padding-top: 4px; }
+.bd-cinput input { flex: 1; height: 34px; border: 0; border-radius: 10px; background: var(--paper); color: var(--ink); padding: 0 11px; font-size: 11px; outline: none; }
+.bd-cinput button { border: 0; border-radius: 10px; padding: 0 14px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 10.5px; cursor: pointer; }
+.bd-cinput button:disabled { opacity: .5; }
+.bd-disclose { border: 0; background: transparent; text-align: left; color: var(--muted); font-size: 11px; font-weight: 700; padding: 0 2px; cursor: pointer; }
+.bd-disclose b { color: var(--teal); }
+.bd-history { display: grid; gap: 7px; padding: 2px 4px; }
+.bd-history > div { display: grid; }
+.bd-history b { font-size: 10.5px; text-transform: capitalize; }
+.bd-history small { color: var(--muted); font-size: 9.5px; }
+.bd-foot { display: flex; gap: 12px; align-items: center; padding-top: 4px; flex-wrap: wrap; }
+.bd-txt { border: 0; background: transparent; color: var(--teal); font-weight: 750; font-size: 11px; cursor: pointer; padding: 6px 0; }
+.bd-txt.danger { color: var(--coral); }
+.bd-done { flex: 1; min-width: 120px; border: 0; border-radius: 13px; padding: 12px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 12.5px; cursor: pointer; }
 .bill-line { width: 100%; display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .bill-line-text strong { display: block; font-size: 12.5px; letter-spacing: -.2px; color: var(--ink); }
 .bill-line-text small { color: var(--muted); font-size: 10px; }
