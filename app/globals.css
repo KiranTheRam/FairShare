@@ -360,6 +360,36 @@ a { color: inherit; text-decoration: none; }
 .bill-line.sched { grid-template-columns: 44px 1fr auto; opacity: 1; }
 .bill-line.sched .bill-line-amt b { color: var(--ink-soft); font-weight: 600; }
 .bill-line.sched .bill-line-amt small { color: var(--muted); }
+
+/* Settle up tab: net positions, the plan, quiet direct record */
+.settle-toolbar { display: flex; align-items: center; gap: 12px; padding: 2px 4px 16px; }
+.settle-toolbar p { margin: 0; color: var(--muted); font-size: 11.5px; flex: 1; }
+.settle-invite { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--teal); font-weight: 750; font-size: 11.5px; cursor: pointer; }
+.settle-nets { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.settle-net { flex: 1; min-width: 110px; display: grid; justify-items: center; gap: 5px; padding: 14px 8px 12px; border-radius: 18px; background: var(--wash); text-align: center; }
+.settle-net .avatar { width: 36px; height: 36px; }
+.settle-net b { font-size: 15px; letter-spacing: -.4px; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.settle-net small { color: var(--muted); font-size: 10px; }
+.settle-net.pos b { color: var(--teal); }
+.settle-net.neg b { color: var(--coral); }
+.settle-netbar { width: 100%; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 6%, transparent); position: relative; overflow: hidden; }
+.settle-netbar i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--muted); min-width: 2px; }
+.settle-net.pos .settle-netbar i { background: var(--teal); }
+.settle-net.neg .settle-netbar i { background: var(--coral); }
+.settle-plan { border-radius: 22px; background: var(--wash); padding: 16px 18px 10px; margin-bottom: 8px; }
+.settle-plan-note { margin: 0; color: var(--muted); font-size: 10.5px; padding: 2px 0 10px; }
+.settle-prow { display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px; align-items: center; padding: 11px 0; }
+.settle-prow + .settle-prow { border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
+.settle-prow .avatar-pair .avatar + .avatar { box-shadow: 0 0 0 2px var(--wash); }
+.settle-prow-text { min-width: 0; }
+.settle-prow-text b { display: block; font-size: 12.5px; letter-spacing: -.2px; }
+.settle-prow-text small { color: var(--muted); font-size: 10.5px; }
+.settle-prow-amt { font-size: 15px; font-weight: 700; letter-spacing: -.4px; color: var(--coral); font-variant-numeric: tabular-nums; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.settle-confirm { border: 0; border-radius: 99px; padding: 7px 14px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 11px; cursor: pointer; }
+.settle-wait { color: var(--muted); font-size: 10.5px; font-weight: 700; }
+.settle-direct { padding: 8px 18px 0; }
+.settle-drow { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 9px 0; opacity: .72; }
+@media (max-width: 640px) { .settle-nets { gap: 8px; } .settle-net { min-width: 96px; } .settle-prow { grid-template-columns: auto 1fr auto; } .settle-prow .settle-confirm, .settle-prow .settle-wait { grid-column: 2 / -1; justify-self: start; } }
 .bill-line { width: 100%; display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .bill-line-text strong { display: block; font-size: 12.5px; letter-spacing: -.2px; color: var(--ink); }
 .bill-line-text small { color: var(--muted); font-size: 10px; }
