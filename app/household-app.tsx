@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowDownLeft, ArrowRight, Bell, BellRing, CarFront, Check, Copy, CreditCard, Download, FileText, House, LayoutDashboard, Lightbulb, Menu, MessageSquare, PackageOpen, Paperclip, Plus, ReceiptText, Repeat2, Settings, Shapes, ShoppingBasket, Trash2, UserPlus, UtensilsCrossed, WalletCards, X } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, Bell, BellRing, Check, Copy, CreditCard, Download, FileText, LayoutDashboard, Menu, MessageSquare, Paperclip, Plus, ReceiptText, Settings, Trash2, UserPlus, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Basket, Car, ForkKnife, House as HouseDuotone, Lightbulb as LightbulbDuotone, Package as PackageDuotone, Repeat as RepeatDuotone, Shapes as ShapesDuotone, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { BILL_CATEGORIES, CATEGORY_LABELS, type BillCategory } from "@/lib/categories";
 import { isThemeId } from "@/lib/themes";
 
@@ -182,19 +183,19 @@ export function HouseholdApp() {
 
 function Avatar({ name }: { name: string }) { return <span className="avatar mint small" aria-label={name}>{initials(name)}</span>; }
 const CATEGORY_ICONS = {
-  housing: House,
-  utilities: Lightbulb,
-  groceries: ShoppingBasket,
-  dining: UtensilsCrossed,
-  transport: CarFront,
-  subscriptions: Repeat2,
-  household: PackageOpen,
-  other: Shapes,
-} satisfies Record<BillCategory, typeof ReceiptText>;
+  housing: HouseDuotone,
+  utilities: LightbulbDuotone,
+  groceries: Basket,
+  dining: ForkKnife,
+  transport: Car,
+  subscriptions: RepeatDuotone,
+  household: PackageDuotone,
+  other: ShapesDuotone,
+} satisfies Record<BillCategory, PhosphorIcon>;
 
 function CategoryIcon({ category, settled }: { category: BillCategory; settled: boolean }) {
   const Icon = CATEGORY_ICONS[category] ?? CATEGORY_ICONS.other;
-  return <span className={`activity-icon category-icon ${settled ? "mint" : `category-${category}`}`} title={CATEGORY_LABELS[category] ?? CATEGORY_LABELS.other}><Icon size={18} aria-hidden="true" /></span>;
+  return <span className={`activity-icon category-icon ${settled ? "mint" : `category-${category}`}`} title={CATEGORY_LABELS[category] ?? CATEGORY_LABELS.other}><Icon size={18} weight="duotone" aria-hidden="true" /></span>;
 }
 function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "overview" ? LayoutDashboard : item === "bills" ? ReceiptText : item === "balances" ? WalletCards : FileText; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{item === "overview" ? "Home" : item[0].toUpperCase() + item.slice(1)}</small></button>; }
 
@@ -246,7 +247,7 @@ function BillLine({ bill, currency, onClick }: { bill: Bill; currency: string; o
   const Icon = CATEGORY_ICONS[bill.category] ?? CATEGORY_ICONS.other;
   const settled = bill.status === "settled";
   return <button className={`bill-line${settled ? " done" : " open"}`} onClick={onClick}>
-    <Icon size={19} className={`bill-cat cat-${bill.category}`} aria-hidden="true" />
+    <Icon size={19} weight="duotone" className={`bill-cat cat-${bill.category}`} aria-hidden="true" />
     <span className="bill-line-text"><strong>{bill.name}</strong><small>{bill.periodLabel} · {CATEGORY_LABELS[bill.category] ?? CATEGORY_LABELS.other} · {bill.amountState}</small></span>
     <span className="bill-line-amt"><b>{money(bill.amountCents, currency)}</b><small>{settled ? "SETTLED ✓" : "OUTSTANDING"}</small></span>
   </button>;
