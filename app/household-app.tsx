@@ -167,7 +167,7 @@ export function HouseholdApp() {
     </header>
     <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1>{tab === "overview" && <button className="activity-link-button" onClick={() => setTab("activity")}><FileText size={16} /> Activity</button>}</div><p>{tab === "overview" ? "Here’s where everyone stands today." : tab === "bills" ? "Outstanding expenses and completed settlement history." : tab === "upcoming" ? "Scheduled household expenses and their next occurrence." : tab === "balances" ? "Open person-to-person obligations after repayments." : "Recent bills, settlements, closures, and payments."}</p></div>{tab !== "overview" && <div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div>}</div>
       {error && <div className="error-banner">{error}<button onClick={refresh}>Try again</button></div>}
-      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onBill={() => setModal("bill")} onPayment={() => openPayment()} onNudge={sendNudge} onBillDetail={openBill} /> : tab === "bills" ? <Bills data={data!} onBillDetail={openBill} /> : tab === "upcoming" ? <Upcoming data={data!} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <Balances data={data!} user={session!.user} onPayment={() => openPayment()} onNudge={sendNudge} onInvite={() => setModal("invite")} /> : <Activity data={data!} householdId={householdId} onBillDetail={openBill} />}
+      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onBill={() => setModal("bill")} onPayment={() => openPayment()} onNudge={sendNudge} onBillDetail={openBill} onOpenBills={() => setTab("bills")} /> : tab === "bills" ? <Bills data={data!} onBillDetail={openBill} /> : tab === "upcoming" ? <Upcoming data={data!} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <Balances data={data!} user={session!.user} onPayment={() => openPayment()} onNudge={sendNudge} onInvite={() => setModal("invite")} /> : <Activity data={data!} householdId={householdId} onBillDetail={openBill} />}
     </div></main>
     <nav className="bottom-nav">{(["overview", "bills"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}<button className="fab" onClick={() => setModal("bill")}><Plus size={24} /></button>{(["upcoming", "balances"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}</nav>
     {modal === "bill" && data && <BillModal data={data} currentUserId={session?.user.id} close={() => setModal(null)} save={async (body, recurring) => { await mutate(`/api/households/${householdId}/bills`, "POST", { ...(body as object), ...(recurring ? { recurring } : {}) }); setModal(null); setToast(recurring ? "Bill and recurring schedule added." : "Bill added to the household ledger."); await refresh(); }} />}
@@ -198,18 +198,18 @@ function CategoryIcon({ category, settled }: { category: BillCategory; settled: 
 }
 function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "overview" ? LayoutDashboard : item === "bills" ? ReceiptText : item === "upcoming" ? CalendarClock : item === "balances" ? WalletCards : FileText; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{item === "overview" ? "Home" : item[0].toUpperCase() + item.slice(1)}</small></button>; }
 
-function BalanceCard({ item, currency, mine, direction, onConfirm, onNudge, onBillDetail }: { item: Balance; currency: string; mine: boolean; direction: "in" | "out" | "other"; onConfirm: () => void; onNudge: (item: Balance) => void; onBillDetail: (id: string) => void }) {
+function BalanceCard({ item, currency, mine, direction, onOpen, onConfirm, onNudge, onBillDetail }: { item: Balance; currency: string; mine: boolean; direction: "in" | "out" | "other"; onOpen: () => void; onConfirm: () => void; onNudge: (item: Balance) => void; onBillDetail: (id: string) => void }) {
   const components = item.components ?? [];
   const title = direction === "in" ? item.payerName : direction === "out" ? `You owe ${item.recipientName}` : `${item.payerName} → ${item.recipientName}`;
-  return <section className={`glance-card${mine ? "" : " glance-other"}`}>
+  return <section className={`glance-card glance-tappable${mine ? "" : " glance-other"}`} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" && event.target === event.currentTarget) onOpen(); }}>
     <div className="glance-card-top">{direction === "other" ? <div className="avatar-pair"><Avatar name={item.payerName ?? ""} /><Avatar name={item.recipientName ?? ""} /></div> : <Avatar name={(direction === "in" ? item.payerName : item.recipientName) ?? ""} />}<span className="glance-who"><strong>{title}</strong><small>{direction === "out" ? "Awaiting their confirmation" : `${components.length || "No"} bill${components.length === 1 ? "" : "s"} open`}</small></span><span className="glance-amt">{money(item.amountCents, currency)}</span></div>
     {components.length > 0 && <div className="glance-breakdown">{components.map((component) => <i key={component.billId} className={`glance-seg category-${component.category}`} style={{ width: `${Math.max((component.amountCents / item.amountCents) * 100, 3)}%` }} title={`${component.billName} — ${money(component.amountCents, currency)}`} />)}</div>}
-    {components.length > 0 && <div className="glance-keys">{components.map((component) => <button key={component.billId} onClick={() => onBillDetail(component.billId)}><i className={`category-${component.category}`} />{component.billName} <b>{money(component.amountCents, currency)}</b></button>)}</div>}
-    {direction === "in" && <div className="glance-actions"><button className="glance-confirm" onClick={onConfirm}>Confirm payment</button><button className="glance-remind" onClick={() => void onNudge(item)}><BellRing size={14} /> Remind</button></div>}
+    {components.length > 0 && <div className="glance-keys">{components.map((component) => <button key={component.billId} onClick={(event) => { event.stopPropagation(); onBillDetail(component.billId); }}><i className={`category-${component.category}`} />{component.billName} <b>{money(component.amountCents, currency)}</b></button>)}</div>}
+    {direction === "in" && <div className="glance-actions"><button className="glance-confirm" onClick={(event) => { event.stopPropagation(); onConfirm(); }}>Confirm payment</button><button className="glance-remind" onClick={(event) => { event.stopPropagation(); void onNudge(item); }}><BellRing size={14} /> Remind</button></div>}
   </section>;
 }
 
-function Overview({ data, user, net, onBill, onPayment, onNudge, onBillDetail }: { data: HouseholdData; user: User; net: number; onBill: () => void; onPayment: () => void; onNudge: (item: Balance) => void; onBillDetail: (id: string) => void }) {
+function Overview({ data, user, net, onBill, onPayment, onNudge, onBillDetail, onOpenBills }: { data: HouseholdData; user: User; net: number; onBill: () => void; onPayment: () => void; onNudge: (item: Balance) => void; onBillDetail: (id: string) => void; onOpenBills: () => void }) {
   const currency = data.household.currency;
   const owedToMe = data.balances.filter((item) => item.recipientUserId === user.id);
   const iOwe = data.balances.filter((item) => item.payerUserId === user.id);
@@ -232,29 +232,56 @@ function Overview({ data, user, net, onBill, onPayment, onNudge, onBillDetail }:
       <button className="glance-add" onClick={onBill}><Plus size={17} /> Add a bill</button>
     </div>
     <div className="glance-col">
-      {owedToMe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="in" onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
-      {iOwe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="out" onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
-      {others.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine={false} direction="other" onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
+      {owedToMe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="in" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
+      {iOwe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="out" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
+      {others.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine={false} direction="other" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
       {!data.balances.length && <section className="glance-card glance-settled"><Check size={26} /><strong>Everyone is settled up</strong><small>New bills will appear here as balances open.</small></section>}
     </div>
   </div>;
 }
 
-function BillRow({ bill, currency, onClick }: { bill: Bill; currency: string; onClick?: () => void }) { const settled = bill.status === "settled"; return <button className="bill-row" onClick={onClick}><CategoryIcon category={bill.category} settled={settled} /><span className="bill-main"><strong>{bill.name}</strong><small>{bill.periodLabel} · {CATEGORY_LABELS[bill.category] ?? CATEGORY_LABELS.other} · {bill.amountState}</small></span><span className="bill-amount"><strong>{money(bill.amountCents, currency)}</strong><span className={`status-pill ${settled ? "done" : "open"}`}>{settled ? "Settled" : "Outstanding"}</span></span></button>; }
+function BillLine({ bill, currency, onClick }: { bill: Bill; currency: string; onClick: () => void }) {
+  const Icon = CATEGORY_ICONS[bill.category] ?? CATEGORY_ICONS.other;
+  const settled = bill.status === "settled";
+  return <button className={`bill-line${settled ? " done" : " open"}`} onClick={onClick}>
+    <Icon size={19} className={`bill-cat cat-${bill.category}`} aria-hidden="true" />
+    <span className="bill-line-text"><strong>{bill.name}</strong><small>{bill.periodLabel} · {CATEGORY_LABELS[bill.category] ?? CATEGORY_LABELS.other} · {bill.amountState}</small></span>
+    <span className="bill-line-amt"><b>{money(bill.amountCents, currency)}</b><small>{settled ? "SETTLED ✓" : "OUTSTANDING"}</small></span>
+  </button>;
+}
+
 function Bills({ data, onBillDetail }: { data: HouseholdData; onBillDetail: (id: string) => void }) {
-  const [filter, setFilter] = useState<"open" | "settled">("open");
-  const bills = data.bills.filter((bill) => bill.status === filter);
-  const openCount = data.bills.filter((bill) => bill.status === "open").length;
-  const settledCount = data.bills.filter((bill) => bill.status === "settled").length;
+  const currency = data.household.currency;
+  const open = data.bills.filter((bill) => bill.status === "open");
+  const settled = data.bills.filter((bill) => bill.status === "settled");
+  const openTotal = open.reduce((sum, bill) => sum + bill.amountCents, 0);
+  const settledTotal = settled.reduce((sum, bill) => sum + bill.amountCents, 0);
+  const recorded = data.bills.reduce((sum, bill) => sum + bill.amountCents, 0);
+  const openBalances = data.balances.reduce((sum, item) => sum + item.amountCents, 0);
   const categoryTotals = useMemo(() => {
     const totals = new Map<BillCategory, number>();
     for (const bill of data.bills) totals.set(bill.category, (totals.get(bill.category) ?? 0) + bill.amountCents);
     return [...totals].sort((a, b) => b[1] - a[1]);
   }, [data.bills]);
   const spendTotal = categoryTotals.reduce((sum, [, amount]) => sum + amount, 0);
-  return <section className="page-content bills-view"><div className="page-toolbar"><p>{filter === "open" ? "Select an expense to settle each person’s share." : "Completed expenses remain available for review."}</p><div className="filter-pills bill-status-filter"><button className={filter === "open" ? "selected" : ""} onClick={() => setFilter("open")}>Outstanding · {openCount}</button><button className={filter === "settled" ? "selected" : ""} onClick={() => setFilter("settled")}>Settled · {settledCount}</button></div></div><div className="month-total"><span><small>OUTSTANDING</small><strong>{openCount}</strong></span><span><small>SETTLED</small><strong>{settledCount}</strong></span><span><small>RECORDED SPEND</small><strong>{money(data.bills.reduce((sum, bill) => sum + bill.amountCents, 0), data.household.currency)}</strong></span><span><small>OPEN BALANCES</small><strong>{money(data.balances.reduce((sum, item) => sum + item.amountCents, 0), data.household.currency)}</strong></span></div>
-    {categoryTotals.length > 0 && <div className="category-breakdown"><p className="eyebrow">SPENDING BY CATEGORY</p>{categoryTotals.map(([category, amountCents]) => <div className="category-line" key={category}><span>{CATEGORY_LABELS[category] ?? CATEGORY_LABELS.other}</span><span className="category-bar"><span style={{ width: `${spendTotal ? Math.max(3, Math.round(amountCents / spendTotal * 100)) : 0}%` }} /></span><strong>{money(amountCents, data.household.currency)}</strong></div>)}</div>}
-    <div className="bill-list flat-list">{bills.map((bill) => <BillRow key={bill.id} bill={bill} currency={data.household.currency} onClick={() => onBillDetail(bill.id)} />)}{!bills.length && <p className="empty-copy">{filter === "open" ? "No outstanding expenses. Everyone is settled up." : "No settled expenses yet."}</p>}</div></section>;
+  return <section className="page-content bills-view">
+    <div className="bills-stats">
+      <div><small>RECORDED</small><b>{money(recorded, currency)}</b></div>
+      <div className="accent"><small>OPEN BALANCES</small><b>{money(openBalances, currency)}</b></div>
+      <div><small>BILLS</small><b>{open.length} / {data.bills.length}</b></div>
+    </div>
+    {categoryTotals.length > 0 && <div className="category-breakdown"><p className="eyebrow">SPENDING BY CATEGORY</p>{categoryTotals.map(([category, amountCents]) => <div className="category-line" key={category}><span>{CATEGORY_LABELS[category] ?? CATEGORY_LABELS.other}</span><span className="category-bar"><span style={{ width: `${spendTotal ? Math.max(3, Math.round(amountCents / spendTotal * 100)) : 0}%` }} /></span><strong>{money(amountCents, currency)}</strong></div>)}</div>}
+    <div className="bills-band">
+      <div className="bills-band-head"><strong>Outstanding</strong><small>{open.length} bill{open.length === 1 ? "" : "s"} · needs settling</small><span className="bills-sum open">{money(openTotal, currency)}</span></div>
+      {open.map((bill) => <BillLine key={bill.id} bill={bill} currency={currency} onClick={() => onBillDetail(bill.id)} />)}
+      {!open.length && <p className="empty-copy">No outstanding expenses. Everyone is settled up.</p>}
+    </div>
+    <div className="bills-band quiet">
+      <div className="bills-band-head"><strong>Settled</strong><small>{settled.length} bill{settled.length === 1 ? "" : "s"}</small><span className="bills-sum done">{money(settledTotal, currency)}</span></div>
+      {settled.map((bill) => <BillLine key={bill.id} bill={bill} currency={currency} onClick={() => onBillDetail(bill.id)} />)}
+      {!settled.length && <p className="empty-copy">No settled expenses yet.</p>}
+    </div>
+  </section>;
 }
 function Upcoming({ data, onEditRecurring }: { data: HouseholdData; onEditRecurring: (item: Recurring) => void }) { const schedules = [...data.recurring].sort((a, b) => +new Date(a.nextOccurrence) - +new Date(b.nextOccurrence)); const activeCount = schedules.filter((item) => item.active).length; return <section className="page-content upcoming-view"><div className="page-toolbar"><p>{activeCount} active schedule{activeCount === 1 ? "" : "s"} · Select one to edit its future details.</p><span className="count-badge">{activeCount}</span></div><div className="upcoming-list flat-list">{schedules.map((item) => { const date = new Date(item.nextOccurrence); return <button className="calendar-item scheduled-item" key={item.id} onClick={() => onEditRecurring(item)}><span className="date-tile"><b>{date.getDate()}</b><small>{date.toLocaleDateString(undefined, { month: "short" }).toUpperCase()}</small></span><span><strong>{item.name}</strong><small>{item.cadence} · {item.expectedAmountCents === null ? "variable amount" : money(item.expectedAmountCents, data.household.currency)}</small></span><span className={`status-pill ${item.active ? "done" : "open"}`}>{item.active ? "Scheduled" : "Paused"}</span></button>; })}{!schedules.length && <p className="empty-copy">No scheduled bills yet. Enable recurrence while adding an expense.</p>}</div></section>; }
 function Balances({ data, user, onPayment, onNudge, onInvite }: { data: HouseholdData; user: User; onPayment: () => void; onNudge: (balance: Balance) => Promise<void>; onInvite: () => void }) {
