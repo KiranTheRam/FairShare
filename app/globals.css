@@ -299,13 +299,15 @@ a { color: inherit; text-decoration: none; }
 .glance-big { font-size: 44px; font-weight: 700; letter-spacing: -1.8px; line-height: 1.05; }
 .glance-sub { color: var(--hero-soft); font-size: 11.5px; }
 .glance-delta { margin-top: 10px; display: inline-flex; width: fit-content; align-items: center; gap: 6px; background: rgba(255,255,255,.13); border-radius: 99px; padding: 5px 11px; font-size: 10.5px; font-weight: 700; color: var(--hero-positive); }
-.glance-card { display: grid; gap: 11px; background: var(--paper); border: 1px solid var(--line); border-radius: 20px; padding: 15px 17px 14px; }
+.glance-zone { display: grid; border-radius: 24px; background: var(--wash); padding: 5px 16px; }
+.glance-card { display: grid; gap: 11px; background: transparent; border: 0; border-radius: 0; padding: 15px 2px 14px; }
+.glance-zone > .glance-card + .glance-card { border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
 .glance-card-top { display: flex; align-items: center; gap: 12px; }
 .glance-card-top .avatar { width: 38px; height: 38px; font-size: 12px; }
 .glance-who { display: grid; gap: 1px; min-width: 0; }
 .glance-who strong { font-size: 13.5px; letter-spacing: -.2px; }
 .glance-who small { color: var(--muted); font-size: 10.5px; }
-.glance-amt { margin-left: auto; font-size: 21px; font-weight: 700; letter-spacing: -.6px; }
+.glance-amt { margin-left: auto; font-size: 21px; font-weight: 700; letter-spacing: -.6px; color: var(--coral); }
 .glance-breakdown { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; }
 .glance-seg { min-width: 5px; }
 .glance-keys { display: flex; flex-wrap: wrap; gap: 4px 8px; }
@@ -315,20 +317,18 @@ a { color: inherit; text-decoration: none; }
 .glance-keys i { width: 8px; height: 8px; border-radius: 2.5px; flex: none; }
 .glance-actions { display: flex; gap: 8px; }
 .glance-confirm { border: 0; border-radius: 99px; padding: 8px 16px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 11.5px; cursor: pointer; }
-.glance-remind { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 99px; padding: 8px 14px; background: transparent; color: var(--teal); font-weight: 750; font-size: 11.5px; cursor: pointer; }
+.glance-remind { display: inline-flex; align-items: center; gap: 6px; border: 0; padding: 8px 6px; background: transparent; color: var(--teal); font-weight: 750; font-size: 11.5px; cursor: pointer; }
 .glance-other { opacity: .8; }
-.glance-settled { place-items: center; text-align: center; padding: 30px 20px; color: var(--teal); gap: 6px; }
+.glance-settled { place-items: center; text-align: center; padding: 30px 20px; color: var(--teal); gap: 6px; background: var(--wash); border-radius: 24px; }
 .glance-settled small { color: var(--muted); }
-.glance-due { display: flex; align-items: center; gap: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 20px; padding: 13px 17px; }
-.glance-cal { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: var(--wash); border: 1px solid var(--line); line-height: 1.05; }
-.glance-cal b { font-size: 15px; }
-.glance-cal small { font-size: 7.5px; color: var(--muted); font-weight: 800; }
+.glance-due { display: flex; align-items: baseline; gap: 12px; background: transparent; border: 0; padding: 14px 8px 0; }
+.glance-when { color: var(--coral); font-size: 11px; font-weight: 800; letter-spacing: .05em; white-space: nowrap; }
 .glance-due-what { display: grid; gap: 1px; }
 .glance-due-what strong { font-size: 12.5px; }
 .glance-due-what small { color: var(--muted); font-size: 10.5px; }
 .glance-due-amt { margin-left: auto; font-size: 14px; font-weight: 700; }
-.glance-add { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px dashed var(--line); border-radius: 20px; padding: 13px; background: transparent; color: var(--teal); font-weight: 750; font-size: 12px; cursor: pointer; }
-.glance-add:hover { background: var(--wash); }
+.glance-add { display: inline-flex; align-items: center; gap: 7px; border: 0; padding: 12px 8px 0; background: transparent; color: var(--teal); font-weight: 750; font-size: 12px; cursor: pointer; justify-content: flex-start; }
+.glance-add:hover { text-decoration: underline; }
 .glance-seg.category-housing, .glance-keys i.category-housing { background: #5968c9; }
 .glance-seg.category-utilities, .glance-keys i.category-utilities { background: #9b6d00; }
 .glance-seg.category-groceries, .glance-keys i.category-groceries { background: #147582; }
@@ -339,7 +339,7 @@ a { color: inherit; text-decoration: none; }
 .glance-seg.category-other, .glance-keys i.category-other { background: #65717c; }
 @media (max-width: 760px) { .glance-grid { grid-template-columns: 1fr; } .glance-big { font-size: 40px; } }
 .glance-tappable { cursor: pointer; }
-.glance-tappable:hover { border-color: var(--field-line); }
+.glance-tappable:hover { background: color-mix(in srgb, var(--ink) 3%, transparent); }
 
 /* Bills tab: flat stats, wash-band grouping, color-coded amounts */
 .bills-stats { display: flex; gap: 34px; padding: 4px 4px 20px; flex-wrap: wrap; }
