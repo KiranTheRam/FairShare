@@ -583,6 +583,27 @@ a { color: inherit; text-decoration: none; }
 .glance-claim-top { display: flex; align-items: center; gap: 12px; }
 .glance-claim-top .avatar { width: 38px; height: 38px; font-size: 12px; }
 .glance-amt.claim { color: var(--teal); }
+
+/* Bills by month */
+.bills-months-lbl { color: var(--muted); font-size: 9.5px; font-weight: 800; letter-spacing: .08em; padding: 8px 4px 2px; display: block; }
+.bills-mrow { width: 100%; display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; border: 0; border-radius: 18px; background: var(--wash); padding: 15px 17px; margin-bottom: 10px; text-align: left; cursor: pointer; }
+.bills-mrow.quiet { background: transparent; }
+.bills-mrow-t b { display: block; font-size: 15px; letter-spacing: -.3px; color: var(--ink); font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.bills-mrow-t small { color: var(--muted); font-size: 10.5px; }
+.bills-mrow-owe { text-align: right; display: grid; justify-items: end; }
+.bills-mrow-owe b { font-size: 14.5px; font-weight: 700; color: var(--coral); font-variant-numeric: tabular-nums; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.bills-mrow-owe small { font-size: 8.5px; font-weight: 800; color: var(--coral); letter-spacing: .04em; }
+.bills-mrow-in { color: var(--teal); font-size: 9.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bills-mrow-zero { color: var(--muted); font-size: 10px; font-weight: 700; }
+.bills-mrow-done { color: var(--teal); font-size: 13px; font-weight: 800; }
+.bills-mrow-chev { color: var(--muted); font-size: 15px; }
+.bills-back { border: 0; background: transparent; text-align: left; display: flex; align-items: baseline; gap: 8px; color: var(--muted); font-size: 11.5px; font-weight: 700; cursor: pointer; padding: 2px 2px 0; }
+.bills-back b { color: var(--ink); font-size: 16px; letter-spacing: -.4px; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.bills-monthline { margin: 0; color: var(--muted); font-size: 10.5px; font-weight: 700; padding: 0 4px 6px; }
+.bills-monthline b { color: var(--coral); font-variant-numeric: tabular-nums; }
+.bill-personal { font-style: normal; font-weight: 750; }
+.bill-personal.owe { color: var(--coral); }
+.bill-personal.in { color: var(--teal); }
 .bill-line { width: 100%; display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .bill-line-text strong { display: block; font-size: 12.5px; letter-spacing: -.2px; color: var(--ink); }
 .bill-line-text small { color: var(--muted); font-size: 10px; }

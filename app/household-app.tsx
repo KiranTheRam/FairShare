@@ -48,6 +48,8 @@ export function HouseholdApp() {
   const [paymentContext, setPaymentContext] = useState<(Balance & { billId?: string | null; billName?: string; note?: string }) | null>(null);
   const [selectedRecurring, setSelectedRecurring] = useState<Recurring | null>(null);
   const [claimContext, setClaimContext] = useState<{ balance: Balance; existing?: Claim; initialCents?: number } | null>(null);
+  const [billsMonth, setBillsMonth] = useState<string | null>(null);
+  function navTo(next: Tab) { if (next === "bills") setBillsMonth(null); setTab(next); }
 
   useEffect(() => {
     document.documentElement.dataset.theme = "dark";
@@ -177,7 +179,7 @@ export function HouseholdApp() {
       <label className="household-switcher"><span className="house-avatar">{initials(data?.household.name ?? "House")}</span><span><small>Household</small><strong>{data?.household.name ?? "Loading…"}</strong></span>
         <select aria-label="Choose household" value={householdId} onChange={(e) => setHouseholdId(e.target.value)}>{session?.households.map((household) => <option key={household.id} value={household.id}>{household.name}</option>)}</select>
       </label>
-      <nav className="side-nav">{(["overview", "bills", "balances", "activity"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => { setTab(item); setSidebarOpen(false); }}>{item === "overview" ? <LayoutDashboard size={19} /> : item === "bills" ? <ReceiptText size={19} /> : item === "balances" ? <WalletCards size={19} /> : <FileText size={19} />}<span>{TAB_LABELS[item]}</span></button>)}</nav>
+      <nav className="side-nav">{(["overview", "bills", "balances", "activity"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => { navTo(item); setSidebarOpen(false); }}>{item === "overview" ? <LayoutDashboard size={19} /> : item === "bills" ? <ReceiptText size={19} /> : item === "balances" ? <WalletCards size={19} /> : <FileText size={19} />}<span>{TAB_LABELS[item]}</span></button>)}</nav>
       <div className="side-bottom"><a className="side-link" href="/settings"><Settings size={19} /> User settings</a><a className="profile-card" href="/settings"><Avatar name={session?.user.displayName ?? ""} /><span><strong>{session?.user.displayName}</strong><small>{session?.user.email}</small></span></a></div>
     </aside>
     {sidebarOpen && <button className="scrim" aria-label="Close menu" onClick={() => setSidebarOpen(false)} />}
@@ -186,9 +188,9 @@ export function HouseholdApp() {
     </header>
     <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1></div><p>{tab === "overview" ? "Here’s where everyone stands today." : tab === "bills" ? "Outstanding, settled, and scheduled household expenses." : tab === "balances" ? "Everyone’s position and the fewest payments to clear it." : "Recent bills, settlements, closures, and payments."}</p></div><div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div></div>
       {error && <div className="error-banner">{error}<button onClick={refresh}>Try again</button></div>}
-      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onPayment={(context) => openPayment(context ?? null)} onNudge={sendNudge} onClaim={(balance) => openClaim(balance)} onEditClaim={(balance, existing) => openClaim(balance, existing)} onCancelClaim={cancelClaim} onDismissClaim={dismissClaim} onBillDetail={openBill} onOpenBills={() => setTab("bills")} /> : tab === "bills" ? <Bills data={data!} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <SettleUp data={data!} user={session!.user} onPayment={(context) => openPayment(context ?? null)} onInvite={() => setModal("invite")} /> : <Activity data={data!} user={session!.user} householdId={householdId} onBillDetail={openBill} />}
+      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onPayment={(context) => openPayment(context ?? null)} onNudge={sendNudge} onClaim={(balance) => openClaim(balance)} onEditClaim={(balance, existing) => openClaim(balance, existing)} onCancelClaim={cancelClaim} onDismissClaim={dismissClaim} onBillDetail={openBill} onOpenBills={() => { setBillsMonth(new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })); setTab("bills"); }} /> : tab === "bills" ? <Bills data={data!} user={session!.user} initialMonth={billsMonth} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <SettleUp data={data!} user={session!.user} onPayment={(context) => openPayment(context ?? null)} onInvite={() => setModal("invite")} /> : <Activity data={data!} user={session!.user} householdId={householdId} onBillDetail={openBill} />}
     </div></main>
-    <nav className="bottom-nav">{(["overview", "bills"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}<button className="fab" onClick={() => setModal("bill")}><Plus size={24} /></button>{(["balances", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}</nav>
+    <nav className="bottom-nav">{(["overview", "bills"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={navTo} />)}<button className="fab" onClick={() => setModal("bill")}><Plus size={24} /></button>{(["balances", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={navTo} />)}</nav>
     {modal === "bill" && data && <BillModal data={data} currentUserId={session?.user.id} close={() => setModal(null)} save={async (body, recurring) => { await mutate(`/api/households/${householdId}/bills`, "POST", { ...(body as object), ...(recurring ? { recurring } : {}) }); setModal(null); setToast(recurring ? "Bill and recurring schedule added." : "Bill added to the household ledger."); setAddAnother(true); await refresh(); }} />}
     {modal === "edit" && data && billDetail && <BillModal data={data} currentUserId={session?.user.id} initial={billDetail} close={() => setModal("detail")} save={async (body) => { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "PATCH", body); setModal(null); setToast("Bill updated and balances recalculated."); await refresh(); }} />}
     {modal === "claim" && data && claimContext && <ClaimModal balance={claimContext.balance} existing={claimContext.existing} initialCents={claimContext.initialCents} currency={data.household.currency} close={() => { setModal(null); setClaimContext(null); }} save={async (body) => { if (claimContext.existing) await mutate(`/api/households/${householdId}/claims/${claimContext.existing.id}`, "PATCH", body); else await mutate(`/api/households/${householdId}/claims`, "POST", body); setModal(null); setClaimContext(null); setToast(claimContext.existing ? "Claim updated." : `${claimContext.balance.recipientName} will be asked to confirm.`); await refresh(); }} />}
@@ -265,24 +267,22 @@ function Overview({ data, user, net, onPayment, onNudge, onClaim, onEditClaim, o
   </div>;
 }
 
-function BillLine({ bill, currency, onClick }: { bill: Bill; currency: string; onClick: () => void }) {
+function BillLine({ bill, currency, personal, onClick }: { bill: Bill; currency: string; personal?: { text: string; tone: "owe" | "in" }; onClick: () => void }) {
   const Icon = CATEGORY_ICONS[bill.category] ?? CATEGORY_ICONS.other;
   const settled = bill.status === "settled";
   return <button className={`bill-line${settled ? " done" : " open"}`} onClick={onClick}>
     <Icon size={19} weight="duotone" className={`bill-cat cat-${bill.category}`} aria-hidden="true" />
-    <span className="bill-line-text"><strong>{bill.name}</strong><small>{bill.periodLabel} · {CATEGORY_LABELS[bill.category] ?? CATEGORY_LABELS.other} · {bill.amountState}</small></span>
+    <span className="bill-line-text"><strong>{bill.name}</strong><small>{bill.periodLabel} · {CATEGORY_LABELS[bill.category] ?? CATEGORY_LABELS.other} · {bill.amountState}{personal ? <> · <em className={`bill-personal ${personal.tone}`}>{personal.text}</em></> : null}</small></span>
     <span className="bill-line-amt"><b>{money(bill.amountCents, currency)}</b><small>{settled ? "SETTLED ✓" : "OUTSTANDING"}</small></span>
   </button>;
 }
 
-function Bills({ data, onBillDetail, onEditRecurring }: { data: HouseholdData; onBillDetail: (id: string) => void; onEditRecurring: (item: Recurring) => void }) {
+function Bills({ data, user, initialMonth, onBillDetail, onEditRecurring }: { data: HouseholdData; user: User; initialMonth?: string | null; onBillDetail: (id: string) => void; onEditRecurring: (item: Recurring) => void }) {
   const currency = data.household.currency;
-  const open = data.bills.filter((bill) => bill.status === "open");
-  const settled = data.bills.filter((bill) => bill.status === "settled");
-  const openTotal = open.reduce((sum, bill) => sum + bill.amountCents, 0);
-  const settledTotal = settled.reduce((sum, bill) => sum + bill.amountCents, 0);
+  const [openMonth, setOpenMonth] = useState<string | null>(initialMonth ?? null);
   const recorded = data.bills.reduce((sum, bill) => sum + bill.amountCents, 0);
   const openBalances = data.balances.reduce((sum, item) => sum + item.amountCents, 0);
+  const openCount = data.bills.filter((bill) => bill.status === "open").length;
   const categoryTotals = useMemo(() => {
     const totals = new Map<BillCategory, number>();
     for (const bill of data.bills) totals.set(bill.category, (totals.get(bill.category) ?? 0) + bill.amountCents);
@@ -291,23 +291,59 @@ function Bills({ data, onBillDetail, onEditRecurring }: { data: HouseholdData; o
   const spendTotal = categoryTotals.reduce((sum, [, amount]) => sum + amount, 0);
   const schedules = [...data.recurring].sort((a, b) => +new Date(a.nextOccurrence) - +new Date(b.nextOccurrence));
   const monthlyEquivalent = Math.round(schedules.reduce((sum, item) => { if (!item.active || item.expectedAmountCents === null) return sum; const factor = item.cadence === "weekly" ? 52 / 12 : item.cadence === "monthly" ? 1 : item.cadence === "quarterly" ? 1 / 3 : 1 / 12; return sum + item.expectedAmountCents * factor; }, 0));
+  // Per-bill personal amounts, derived from the same balance components the homepage uses.
+  const youOweByBill = new Map<string, number>();
+  const owedToYouByBill = new Map<string, number>();
+  for (const balance of data.balances) for (const component of balance.components ?? []) {
+    if (balance.payerUserId === user.id) youOweByBill.set(component.billId, (youOweByBill.get(component.billId) ?? 0) + component.amountCents);
+    if (balance.recipientUserId === user.id) owedToYouByBill.set(component.billId, (owedToYouByBill.get(component.billId) ?? 0) + component.amountCents);
+  }
+  const months = useMemo(() => {
+    const groups = new Map<string, Bill[]>();
+    for (const bill of data.bills) { const key = bill.periodLabel; const group = groups.get(key); if (group) group.push(bill); else groups.set(key, [bill]); }
+    return [...groups.entries()].map(([label, bills]) => ({ label, bills, latest: Math.max(...bills.map((bill) => +new Date(bill.createdAt))), parsed: +new Date(label) }))
+      .sort((a, b) => (Number.isNaN(b.parsed) || Number.isNaN(a.parsed) ? b.latest - a.latest : b.parsed - a.parsed));
+  }, [data.bills]);
+  const monthOwe = (bills: Bill[]) => bills.reduce((sum, bill) => sum + (youOweByBill.get(bill.id) ?? 0), 0);
+  const monthOwed = (bills: Bill[]) => bills.reduce((sum, bill) => sum + (owedToYouByBill.get(bill.id) ?? 0), 0);
+  const personalFor = (bill: Bill) => { const owe = youOweByBill.get(bill.id) ?? 0; const owed = owedToYouByBill.get(bill.id) ?? 0; return owe > 0 ? { text: `you still owe ${money(owe, currency)}`, tone: "owe" as const } : owed > 0 ? { text: `owed to you ${money(owed, currency)}`, tone: "in" as const } : undefined; };
+
+  const current = openMonth ? months.find((month) => month.label === openMonth) : undefined;
+  if (current) {
+    const open = current.bills.filter((bill) => bill.status === "open");
+    const settled = current.bills.filter((bill) => bill.status === "settled");
+    const owe = monthOwe(current.bills); const owed = monthOwed(current.bills);
+    return <section className="page-content bills-view">
+      <button className="bills-back" onClick={() => setOpenMonth(null)}>‹ Months <span>·</span> <b>{current.label}</b></button>
+      <p className="bills-monthline">{current.bills.length} bill{current.bills.length === 1 ? "" : "s"} · {money(current.bills.reduce((sum, bill) => sum + bill.amountCents, 0), currency)} recorded{owe > 0 ? <> · <b>you still owe {money(owe, currency)}</b></> : null}{owed > 0 ? ` · owed to you ${money(owed, currency)}` : ""}</p>
+      <div className="bills-band">
+        <div className="bills-band-head"><strong>Outstanding</strong><small>{open.length} bill{open.length === 1 ? "" : "s"}</small><span className="bills-sum open">{money(open.reduce((sum, bill) => sum + bill.amountCents, 0), currency)}</span></div>
+        {open.map((bill) => <BillLine key={bill.id} bill={bill} currency={currency} personal={personalFor(bill)} onClick={() => onBillDetail(bill.id)} />)}
+        {!open.length && <p className="empty-copy">Nothing outstanding in {current.label}.</p>}
+      </div>
+      <div className="bills-band quiet">
+        <div className="bills-band-head"><strong>Settled</strong><small>{settled.length} bill{settled.length === 1 ? "" : "s"}</small><span className="bills-sum done">{money(settled.reduce((sum, bill) => sum + bill.amountCents, 0), currency)}</span></div>
+        {settled.map((bill) => <BillLine key={bill.id} bill={bill} currency={currency} onClick={() => onBillDetail(bill.id)} />)}
+        {!settled.length && <p className="empty-copy">No settled expenses yet.</p>}
+      </div>
+    </section>;
+  }
+
   return <section className="page-content bills-view">
     <div className="bills-stats">
       <div><small>RECORDED</small><b>{money(recorded, currency)}</b></div>
       <div className="accent"><small>OPEN BALANCES</small><b>{money(openBalances, currency)}</b></div>
-      <div><small>BILLS</small><b>{open.length} / {data.bills.length}</b></div>
+      <div><small>BILLS</small><b>{openCount} / {data.bills.length}</b></div>
     </div>
     {categoryTotals.length > 0 && <div className="category-breakdown"><p className="eyebrow">SPENDING BY CATEGORY</p>{categoryTotals.map(([category, amountCents]) => <div className="category-line" key={category}><span>{CATEGORY_LABELS[category] ?? CATEGORY_LABELS.other}</span><span className="category-bar"><span style={{ width: `${spendTotal ? Math.max(3, Math.round(amountCents / spendTotal * 100)) : 0}%` }} /></span><strong>{money(amountCents, currency)}</strong></div>)}</div>}
-    <div className="bills-band">
-      <div className="bills-band-head"><strong>Outstanding</strong><small>{open.length} bill{open.length === 1 ? "" : "s"} · needs settling</small><span className="bills-sum open">{money(openTotal, currency)}</span></div>
-      {open.map((bill) => <BillLine key={bill.id} bill={bill} currency={currency} onClick={() => onBillDetail(bill.id)} />)}
-      {!open.length && <p className="empty-copy">No outstanding expenses. Everyone is settled up.</p>}
-    </div>
-    <div className="bills-band quiet">
-      <div className="bills-band-head"><strong>Settled</strong><small>{settled.length} bill{settled.length === 1 ? "" : "s"}</small><span className="bills-sum done">{money(settledTotal, currency)}</span></div>
-      {settled.map((bill) => <BillLine key={bill.id} bill={bill} currency={currency} onClick={() => onBillDetail(bill.id)} />)}
-      {!settled.length && <p className="empty-copy">No settled expenses yet.</p>}
-    </div>
+    <span className="bills-months-lbl">MONTHS</span>
+    {months.map((month) => { const owe = monthOwe(month.bills); const owed = monthOwed(month.bills); const allSettled = month.bills.every((bill) => bill.status === "settled");
+      return <button className={`bills-mrow${allSettled ? " quiet" : ""}`} key={month.label} onClick={() => setOpenMonth(month.label)}>
+        <span className="bills-mrow-t"><b>{month.label}</b><small>{month.bills.length} bill{month.bills.length === 1 ? "" : "s"} · {money(month.bills.reduce((sum, bill) => sum + bill.amountCents, 0), currency)} recorded</small></span>
+        {allSettled ? <span className="bills-mrow-done">✓ settled</span> : <span className="bills-mrow-owe">{owe > 0 ? <><b>{money(owe, currency)}</b><small>YOU STILL OWE</small></> : <span className="bills-mrow-zero">nothing from you</span>}{owed > 0 && <span className="bills-mrow-in">owed to you {money(owed, currency)}</span>}</span>}
+        <span className="bills-mrow-chev">›</span>
+      </button>; })}
+    {!months.length && <p className="empty-copy">No bills yet. Add the first shared expense.</p>}
     <div className="bills-band quiet">
       <div className="bills-band-head"><strong>Scheduled</strong><small>{schedules.length} recurring · tap to edit</small>{monthlyEquivalent > 0 && <span className="bills-sum sched">≈ {money(monthlyEquivalent, currency)} / mo</span>}</div>
       {schedules.map((item) => { const date = new Date(item.nextOccurrence); return <button className="bill-line sched" key={item.id} onClick={() => onEditRecurring(item)}>
@@ -319,6 +355,8 @@ function Bills({ data, onBillDetail, onEditRecurring }: { data: HouseholdData; o
     </div>
   </section>;
 }
+
+
 function SettleUp({ data, user, onPayment, onInvite }: { data: HouseholdData; user: User; onPayment: (context?: Balance) => void; onInvite: () => void }) {
   const currency = data.household.currency;
   const nets = data.members.map((member) => ({ member, net: data.balances.reduce((sum, item) => sum + (item.recipientUserId === member.id ? item.amountCents : 0) - (item.payerUserId === member.id ? item.amountCents : 0), 0) }));
@@ -350,6 +388,7 @@ function SettleUp({ data, user, onPayment, onInvite }: { data: HouseholdData; us
     </div>
   </section>;
 }
+
 function Activity({ data, user, householdId, onBillDetail }: { data: HouseholdData; user: User; householdId: string; onBillDetail: (id: string) => void }) {
   const currency = data.household.currency;
   type Item = { id: string; billId?: string; when: string; title: string; detail: string; kind: "bill" | "payment" | "closure"; category?: BillCategory; toMe: boolean; settledShare: boolean; amountCents: number };
