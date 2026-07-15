@@ -355,6 +355,11 @@ a { color: inherit; text-decoration: none; }
 .bills-sum { margin-left: auto; font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .bills-sum.open { color: var(--coral); }
 .bills-sum.done { color: var(--teal); }
+.bills-sum.sched { color: var(--muted); font-weight: 600; }
+.bill-when { color: var(--coral); font-size: 9.5px; font-weight: 800; letter-spacing: .05em; align-self: center; white-space: nowrap; }
+.bill-line.sched { grid-template-columns: 44px 1fr auto; opacity: 1; }
+.bill-line.sched .bill-line-amt b { color: var(--ink-soft); font-weight: 600; }
+.bill-line.sched .bill-line-amt small { color: var(--muted); }
 .bill-line { width: 100%; display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .bill-line-text strong { display: block; font-size: 12.5px; letter-spacing: -.2px; color: var(--ink); }
 .bill-line-text small { color: var(--muted); font-size: 10px; }
