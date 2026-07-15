@@ -22,13 +22,13 @@ export async function generateDueBills(now = new Date()) {
     const amountCents = template.expectedAmountCents ?? template.templateConfig.allocations.reduce((sum, item) => sum + item.amountCents, 0);
     const occurrence = template.nextOccurrence.toISOString().slice(0, 10);
     try {
-      await createBill(template.householdId, template.createdByUserId, {
+      const bill = await createBill(template.householdId, template.createdByUserId, {
         name: template.name, category: template.category, amountCents, periodLabel: occurrence, dueDate: template.nextOccurrence.toISOString(),
         amountState: template.expectedAmountCents === null ? "estimated" : "final", allocationMethod: template.allocationMethod,
         contributions: template.templateConfig.contributions, allocations: template.templateConfig.allocations,
         recurringTemplateId: template.id,
       });
-      await notifyHousehold({ householdId: template.householdId, type: "bill", title: "Recurring bill generated", body: `${template.name} was created for ${occurrence}.`, targetPath: "/" });
+      await notifyHousehold({ householdId: template.householdId, type: "bill", title: "Recurring bill generated", body: `${template.name} was created for ${occurrence}.`, targetPath: `/?bill=${bill.id}` });
       created += 1;
     } catch (error) {
       const duplicate = typeof error === "object" && error && "code" in error && error.code === "23505";

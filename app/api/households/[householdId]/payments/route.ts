@@ -65,7 +65,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ho
     const payment = result.payment;
     if (!result.created) return { payment, replayed: true };
     const notifyUserId = user.id === input.payerUserId ? input.recipientUserId : input.payerUserId;
-    await notifyUser({ householdId, userId: notifyUserId, type: "payment", title: "Payment recorded", body: `${input.amountCents / 100} ${household.currency} was recorded toward your balance.`, targetPath: "/" });
+    await notifyUser({ householdId, userId: notifyUserId, type: "payment", title: "Payment recorded", body: `${input.amountCents / 100} ${household.currency} was recorded toward your balance.`, targetPath: input.billId ? `/?bill=${input.billId}` : "/" });
     await writeAudit(request, user, "payment.created", "payment", payment.id, householdId, { amountCents: payment.amountCents });
     return { payment, replayed: false };
   }, 201);

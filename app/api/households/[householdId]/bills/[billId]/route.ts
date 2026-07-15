@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ h
     const input = await parseJson(request, billUpdateSchema);
     const bill = await updateBill(billId, householdId, user.id, input.revision, input);
     await writeAudit(request, user, "bill.updated", "bill", billId, householdId, { revision: bill.revision });
-    await notifyHousehold({ householdId, excludeUserId: user.id, type: "bill", title: "Bill updated", body: `${bill.name} was materially updated and balances were recalculated.`, targetPath: `/` });
+    await notifyHousehold({ householdId, excludeUserId: user.id, type: "bill", title: "Bill updated", body: `${bill.name} was materially updated and balances were recalculated.`, targetPath: `/?bill=${billId}` });
     return { bill };
   });
 }
