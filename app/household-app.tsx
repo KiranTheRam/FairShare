@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowDownLeft, ArrowRight, Bell, BellRing, Check, Copy, CreditCard, Download, FileText, LayoutDashboard, Menu, MessageSquare, Paperclip, Plus, ReceiptText, Settings, Trash2, UserPlus, WalletCards, X } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, Bell, BellRing, Check, Copy, Download, FileText, LayoutDashboard, Menu, MessageSquare, Paperclip, Plus, ReceiptText, Settings, Trash2, UserPlus, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Basket, Car, ForkKnife, House as HouseDuotone, Lightbulb as LightbulbDuotone, Package as PackageDuotone, Repeat as RepeatDuotone, Shapes as ShapesDuotone, type Icon as PhosphorIcon } from "@phosphor-icons/react";
+import { Basket, Car, FileX, ForkKnife, HandCoins, House as HouseDuotone, Lightbulb as LightbulbDuotone, Package as PackageDuotone, Repeat as RepeatDuotone, SealCheck, Shapes as ShapesDuotone, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { BILL_CATEGORIES, CATEGORY_LABELS, type BillCategory } from "@/lib/categories";
 import { isThemeId } from "@/lib/themes";
 
@@ -169,7 +169,7 @@ export function HouseholdApp() {
     </header>
     <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1>{tab === "overview" && <button className="activity-link-button" onClick={() => setTab("activity")}><FileText size={16} /> Activity</button>}</div><p>{tab === "overview" ? "Here’s where everyone stands today." : tab === "bills" ? "Outstanding, settled, and scheduled household expenses." : tab === "balances" ? "Everyone’s position and the fewest payments to clear it." : "Recent bills, settlements, closures, and payments."}</p></div>{tab !== "overview" && <div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div>}</div>
       {error && <div className="error-banner">{error}<button onClick={refresh}>Try again</button></div>}
-      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onBill={() => setModal("bill")} onPayment={(context) => openPayment(context ?? null)} onNudge={sendNudge} onBillDetail={openBill} onOpenBills={() => setTab("bills")} /> : tab === "bills" ? <Bills data={data!} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <SettleUp data={data!} user={session!.user} onPayment={(context) => openPayment(context ?? null)} onInvite={() => setModal("invite")} /> : <Activity data={data!} householdId={householdId} onBillDetail={openBill} />}
+      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onBill={() => setModal("bill")} onPayment={(context) => openPayment(context ?? null)} onNudge={sendNudge} onBillDetail={openBill} onOpenBills={() => setTab("bills")} /> : tab === "bills" ? <Bills data={data!} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <SettleUp data={data!} user={session!.user} onPayment={(context) => openPayment(context ?? null)} onInvite={() => setModal("invite")} /> : <Activity data={data!} user={session!.user} householdId={householdId} onBillDetail={openBill} />}
     </div></main>
     <nav className="bottom-nav">{(["overview", "bills"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}<button className="fab" onClick={() => setModal("bill")}><Plus size={24} /></button>{(["balances", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}</nav>
     {modal === "bill" && data && <BillModal data={data} currentUserId={session?.user.id} close={() => setModal(null)} save={async (body, recurring) => { await mutate(`/api/households/${householdId}/bills`, "POST", { ...(body as object), ...(recurring ? { recurring } : {}) }); setModal(null); setToast(recurring ? "Bill and recurring schedule added." : "Bill added to the household ledger."); await refresh(); }} />}
@@ -194,10 +194,6 @@ const CATEGORY_ICONS = {
   other: ShapesDuotone,
 } satisfies Record<BillCategory, PhosphorIcon>;
 
-function CategoryIcon({ category, settled }: { category: BillCategory; settled: boolean }) {
-  const Icon = CATEGORY_ICONS[category] ?? CATEGORY_ICONS.other;
-  return <span className={`activity-icon category-icon ${settled ? "mint" : `category-${category}`}`} title={CATEGORY_LABELS[category] ?? CATEGORY_LABELS.other}><Icon size={18} weight="duotone" aria-hidden="true" /></span>;
-}
 function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "overview" ? LayoutDashboard : item === "bills" ? ReceiptText : item === "balances" ? WalletCards : FileText; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{item === "overview" ? "Home" : TAB_LABELS[item]}</small></button>; }
 
 function BalanceCard({ item, currency, mine, direction, onOpen, onConfirm, onNudge, onBillDetail }: { item: Balance; currency: string; mine: boolean; direction: "in" | "out" | "other"; onOpen: () => void; onConfirm: (item: Balance) => void; onNudge: (item: Balance) => void; onBillDetail: (id: string) => void }) {
@@ -329,14 +325,47 @@ function SettleUp({ data, user, onPayment, onInvite }: { data: HouseholdData; us
     </div>
   </section>;
 }
-function Activity({ data, householdId, onBillDetail }: { data: HouseholdData; householdId: string; onBillDetail: (id: string) => void }) {
-  const items = [
-    ...data.bills.map((bill) => ({ id: `bill:${bill.id}`, billId: bill.id, when: bill.createdAt, title: `${bill.name} added`, detail: `${money(bill.amountCents, data.household.currency)} · ${bill.status === "settled" ? "Settled" : "Outstanding"} · Added by ${bill.createdByName ?? "a household member"}`, kind: "bill" as const, category: bill.category, settled: bill.status === "settled" })),
-    ...data.payments.map((payment) => ({ id: `payment:${payment.id}`, billId: payment.billId ?? undefined, when: payment.paidAt, title: payment.note === "Marked settled" && payment.billName ? `${payment.payerName} settled their share of ${payment.billName}` : payment.billName ? `${payment.payerName} paid toward ${payment.billName}` : `${payment.payerName ?? "A member"} recorded a general payment`, detail: `${money(payment.amountCents, data.household.currency)} to ${payment.recipientName ?? "another member"} · Recorded by ${payment.actorName ?? "a household member"}`, kind: "payment" as const })),
-    ...data.closures.map((closure) => ({ id: `closure:${closure.id}`, billId: closure.billId, when: closure.changedAt, title: `${closure.billName} closed without another payment`, detail: `Closed by ${closure.actorName}`, kind: "closure" as const })),
+function Activity({ data, user, householdId, onBillDetail }: { data: HouseholdData; user: User; householdId: string; onBillDetail: (id: string) => void }) {
+  const currency = data.household.currency;
+  type Item = { id: string; billId?: string; when: string; title: string; detail: string; kind: "bill" | "payment" | "closure"; category?: BillCategory; toMe: boolean; settledShare: boolean; amountCents: number };
+  const items: Item[] = [
+    ...data.bills.map((bill) => ({ id: `bill:${bill.id}`, billId: bill.id, when: bill.createdAt, title: `${bill.name} added`, detail: `${bill.status === "settled" ? "Settled" : "Outstanding"} · ${CATEGORY_LABELS[bill.category] ?? CATEGORY_LABELS.other} · by ${bill.createdByName ?? "a household member"}`, kind: "bill" as const, category: bill.category, toMe: false, settledShare: false, amountCents: bill.amountCents })),
+    ...data.payments.map((payment) => ({ id: `payment:${payment.id}`, billId: payment.billId ?? undefined, when: payment.paidAt, title: payment.note === "Marked settled" && payment.billName ? `${payment.payerName} settled their share of ${payment.billName}` : payment.billName ? `${payment.payerName} paid toward ${payment.billName}` : `${payment.payerName ?? "A member"} paid ${payment.recipientName ?? "another member"}`, detail: `to ${payment.recipientUserId === user.id ? "you" : payment.recipientName ?? "another member"} · confirmed by ${payment.actorName ?? "a household member"}`, kind: "payment" as const, toMe: payment.recipientUserId === user.id, settledShare: payment.note === "Marked settled", amountCents: payment.amountCents })),
+    ...data.closures.map((closure) => ({ id: `closure:${closure.id}`, billId: closure.billId, when: closure.changedAt, title: `${closure.billName} closed without payment`, detail: `closed by ${closure.actorName}`, kind: "closure" as const, toMe: false, settledShare: false, amountCents: 0 })),
   ].sort((a, b) => +new Date(b.when) - +new Date(a.when));
-
-  return <section className="page-content activity-view"><div className="page-toolbar"><p>Every bill, settlement, closure, and payment stays reviewable here.</p><a className="secondary-button" href={`/api/households/${householdId}/export`} download><Download size={16} /> Export CSV</a></div><div className="timeline flat-list">{items.map((item) => <div className="timeline-group" key={item.id}><button className="timeline-item" disabled={!item.billId} onClick={() => item.billId && onBillDetail(item.billId)}>{item.kind === "bill" ? <CategoryIcon category={item.category} settled={item.settled} /> : <span className={`activity-icon ${item.kind === "closure" ? "yellow" : "mint"}`}>{item.kind === "closure" ? <Check size={18} /> : <CreditCard size={18} />}</span>}<span><strong>{item.title}</strong><small>{item.detail}</small></span><time>{new Date(item.when).toLocaleDateString()}</time></button></div>)}{!items.length && <p className="empty-copy">Activity will appear here as bills, settlements, closures, and payments are recorded.</p>}</div></section>;
+  const [now] = useState(() => Date.now());
+  const dayKey = (iso: string) => new Date(iso).toDateString();
+  const todayKey = new Date(now).toDateString();
+  const yesterdayKey = new Date(now - 86_400_000).toDateString();
+  const groups: Array<{ key: string; items: Item[] }> = [];
+  for (const item of items) { const key = dayKey(item.when); const group = groups[groups.length - 1]; if (group && group.key === key) group.items.push(item); else groups.push({ key, items: [item] }); }
+  const daySummary = (dayItems: Item[]) => {
+    const received = dayItems.reduce((sum, item) => sum + (item.kind === "payment" && item.toMe ? item.amountCents : 0), 0);
+    if (received > 0) return `${money(received, currency)} confirmed`;
+    const bills = dayItems.filter((item) => item.kind === "bill");
+    if (bills.length) return `${bills.length} bill${bills.length === 1 ? "" : "s"} added · ${money(bills.reduce((sum, item) => sum + item.amountCents, 0), currency)}`;
+    const payments = dayItems.filter((item) => item.kind === "payment");
+    if (payments.length) return `${payments.length} payment${payments.length === 1 ? "" : "s"} confirmed`;
+    return `${dayItems.length} closed`;
+  };
+  const timeLabel = (iso: string, key: string) => {
+    if (key !== todayKey) return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    const minutes = Math.max(Math.round((now - +new Date(iso)) / 60_000), 0);
+    if (minutes < 60) return `${minutes}m ago`;
+    return `${Math.round(minutes / 60)}h ago`;
+  };
+  return <section className="page-content activity-view">
+    <div className="activity-toolbar"><p>Every bill, payment, and closure stays reviewable here.</p><a className="activity-export" href={`/api/households/${householdId}/export`} download><Download size={15} /> Export CSV</a></div>
+    {groups.map((group) => { const first = new Date(group.items[0].when); return <div className="activity-day" key={group.key}>
+      <div className="activity-day-head"><strong>{group.key === todayKey ? "Today" : group.key === yesterdayKey ? "Yesterday" : first.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</strong><small>{first.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}</small><span className="activity-day-sum">{daySummary(group.items)}</span></div>
+      {group.items.map((item) => { const Icon = item.kind === "bill" ? (CATEGORY_ICONS[item.category ?? "other"] ?? CATEGORY_ICONS.other) : item.kind === "closure" ? FileX : item.settledShare ? SealCheck : HandCoins; return <button className="activity-row" key={item.id} disabled={!item.billId} onClick={() => item.billId && onBillDetail(item.billId)}>
+        <Icon size={21} weight="duotone" className={`activity-glyph ${item.kind === "bill" ? `bill-cat cat-${item.category ?? "other"}` : item.kind === "closure" ? "glyph-close" : "glyph-pay"}`} aria-hidden="true" />
+        <span className="activity-text"><strong>{item.title}</strong><small>{item.detail}</small></span>
+        <span className="activity-right"><b className={item.kind === "payment" && item.toMe ? "amt-in" : item.kind === "closure" ? "amt-close" : "amt-bill"}>{item.kind === "closure" ? "—" : `${item.kind === "payment" && item.toMe ? "+" : ""}${money(item.amountCents, currency)}`}</b><small>{timeLabel(item.when, group.key)}</small></span>
+      </button>; })}
+    </div>; })}
+    {!items.length && <p className="empty-copy">Activity will appear here as bills, settlements, closures, and payments are recorded.</p>}
+  </section>;
 }
 
 function Modal({ title, subtitle, close, children }: { title: string; subtitle: string; close: () => void; children: React.ReactNode }) { return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}><section className="modal" role="dialog" aria-modal="true"><div className="modal-header"><div><h2>{title}</h2><p>{subtitle}</p></div><button className="icon-button" onClick={close}><X size={20} /></button></div><div className="modal-body">{children}</div></section></div>; }
