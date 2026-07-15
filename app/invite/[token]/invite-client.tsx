@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Home, UserPlus } from "lucide-react";
+import { PasswordInput } from "@/app/password-input";
 
 type InvitePreview = { householdName: string; invitedBy: string; expiresAt: string };
 type SessionUser = { id: string; displayName: string; role: "member" | "administrator" };
@@ -61,7 +62,7 @@ export function InviteClient({ token }: { token: string }) {
       </form> : <form onSubmit={(event) => { event.preventDefault(); void accept({ displayName, email, password }); }}>
         <label>Display name<input autoComplete="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required autoFocus /></label>
         <label>Email<input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
-        <label>Password<input type="password" autoComplete="new-password" minLength={12} placeholder="12+ characters with upper, lower, and a number" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
+        <label>Password<PasswordInput autoComplete="new-password" minLength={12} placeholder="12+ characters with upper, lower, and a number" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="primary-button" disabled={busy}>{busy ? "Creating account…" : "Create account and join"}</button>
         <p className="auth-footnote">Already have a FairShare account? <a href="/login">Sign in first</a>, then open this invite link again.</p>

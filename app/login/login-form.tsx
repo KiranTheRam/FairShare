@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { LockKeyhole, ShieldCheck } from "lucide-react";
+import { PasswordInput } from "@/app/password-input";
 
 export function LoginForm({ initialSetup }: { initialSetup: boolean }) {
   const [setup, setSetup] = useState(initialSetup);
@@ -38,8 +39,8 @@ export function LoginForm({ initialSetup }: { initialSetup: boolean }) {
     <form onSubmit={submit}>
       {setup && <label>Display name<input autoComplete="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required /></label>}
       <label>Email<input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus={!setup} /></label>
-      <label>Password<input type="password" autoComplete={setup ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} minLength={setup ? 12 : 1} required /></label>
-      {setup && <label>Setup token<input type="password" autoComplete="off" value={setupToken} onChange={(e) => setSetupToken(e.target.value)} required /></label>}
+      <label>Password<PasswordInput autoComplete={setup ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} minLength={setup ? 12 : 1} required /></label>
+      {setup && <label>Setup token<PasswordInput autoComplete="off" value={setupToken} onChange={(e) => setSetupToken(e.target.value)} required /></label>}
       {error && <p className="form-error" role="alert">{error}</p>}
       <button className="primary-button" disabled={busy}>{busy ? "Please wait…" : setup ? "Create administrator" : "Sign in"}</button>
     </form>
