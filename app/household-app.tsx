@@ -516,7 +516,7 @@ function PaymentModal({ data, currentUserId, specific, close, save }: { data: Ho
   const [index, setIndex] = useState(initialIndex);
   const balance = choices[index];
   const maxCents = specific && billLocked ? specific.amountCents : balance?.amountCents ?? 0;
-  const [amount, setAmount] = useState(maxCents ? (maxCents / 100).toFixed(2) : "");
+  const [amount, setAmount] = useState(maxCents ? ((specific ? Math.min(specific.amountCents, maxCents) : maxCents) / 100).toFixed(2) : "");
   const [note, setNote] = useState(specific?.note ?? "");
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
