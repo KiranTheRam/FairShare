@@ -39,6 +39,7 @@ export function HouseholdApp() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [toast, setToast] = useState("");
+  const [addAnother, setAddAnother] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
@@ -66,7 +67,7 @@ export function HouseholdApp() {
   // refresh is intentionally keyed only by the selected Household.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (householdId) void refresh(); }, [householdId]);
-  useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(""), 3200); return () => clearTimeout(timer); }, [toast]);
+  useEffect(() => { if (!toast) return; const timer = setTimeout(() => { setToast(""); setAddAnother(false); }, 4000); return () => clearTimeout(timer); }, [toast]);
 
   async function refresh() {
     setLoading(true); setError("");
@@ -172,13 +173,13 @@ export function HouseholdApp() {
       {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onBill={() => setModal("bill")} onPayment={(context) => openPayment(context ?? null)} onNudge={sendNudge} onBillDetail={openBill} onOpenBills={() => setTab("bills")} /> : tab === "bills" ? <Bills data={data!} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <SettleUp data={data!} user={session!.user} onPayment={(context) => openPayment(context ?? null)} onInvite={() => setModal("invite")} /> : <Activity data={data!} user={session!.user} householdId={householdId} onBillDetail={openBill} />}
     </div></main>
     <nav className="bottom-nav">{(["overview", "bills"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}<button className="fab" onClick={() => setModal("bill")}><Plus size={24} /></button>{(["balances", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}</nav>
-    {modal === "bill" && data && <BillModal data={data} currentUserId={session?.user.id} close={() => setModal(null)} save={async (body, recurring) => { await mutate(`/api/households/${householdId}/bills`, "POST", { ...(body as object), ...(recurring ? { recurring } : {}) }); setModal(null); setToast(recurring ? "Bill and recurring schedule added." : "Bill added to the household ledger."); await refresh(); }} />}
+    {modal === "bill" && data && <BillModal data={data} currentUserId={session?.user.id} close={() => setModal(null)} save={async (body, recurring) => { await mutate(`/api/households/${householdId}/bills`, "POST", { ...(body as object), ...(recurring ? { recurring } : {}) }); setModal(null); setToast(recurring ? "Bill and recurring schedule added." : "Bill added to the household ledger."); setAddAnother(true); await refresh(); }} />}
     {modal === "edit" && data && billDetail && <BillModal data={data} currentUserId={session?.user.id} initial={billDetail} close={() => setModal("detail")} save={async (body) => { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "PATCH", body); setModal(null); setToast("Bill updated and balances recalculated."); await refresh(); }} />}
     {modal === "payment" && data && <PaymentModal data={data} currentUserId={session?.user.id ?? ""} specific={paymentContext} close={() => { setModal(null); setPaymentContext(null); }} save={async (body) => { await mutate(`/api/households/${householdId}/payments`, "POST", body); setModal(null); setPaymentContext(null); setToast("Payment confirmed."); await refresh(); }} />}
     {modal === "recurring-edit" && data && selectedRecurring && <RecurringModal data={data} initial={selectedRecurring} close={() => setModal(null)} save={async (body) => { await mutate(`/api/households/${householdId}/recurring/${selectedRecurring.id}`, "PATCH", body); setModal(null); setSelectedRecurring(null); setToast("Future recurring bills will use the updated schedule."); await refresh(); }} />}
     {modal === "invite" && data && <InviteModal householdName={data.household.name} householdId={householdId} mutate={mutate} close={() => setModal(null)} />}
     {modal === "detail" && billDetail && <BillDetailModal detail={billDetail} userId={session?.user.id ?? ""} currency={data?.household.currency ?? "USD"} addComment={(body) => addComment(billDetail.bill.id, body)} uploadAttachment={(file) => uploadAttachment(billDetail.bill.id, file)} removeAttachment={(attachmentId) => removeAttachment(billDetail.bill.id, attachmentId)} attachmentHref={(attachmentId) => `/api/households/${householdId}/bills/${billDetail.bill.id}/attachments/${attachmentId}`} close={() => setModal(null)} edit={() => setModal("edit")} remove={async () => { if (!confirm("Remove this bill and recalculate Household balances? The audit record is retained.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "DELETE"); setModal(null); setToast("Bill removed and balances recalculated."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Bill could not be removed"); } }} record={(item) => openPayment({ billId: billDetail.bill.id, payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, payerName: item.debtorName, recipientName: item.creditorName, amountCents: item.outstandingAmountCents })} settle={async (item) => { if (!confirm(`Confirm receipt of ${money(item.outstandingAmountCents, data?.household.currency ?? "USD")} from ${item.debtorName} and mark this share settled?`)) return; try { await mutate(`/api/households/${householdId}/payments`, "POST", { idempotencyKey: crypto.randomUUID(), billId: billDetail.bill.id, payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, amountCents: item.outstandingAmountCents, note: "Marked settled", paidAt: new Date().toISOString() }); setToast(`${item.debtorName}’s share was settled.`); await refresh(); await openBill(billDetail.bill.id); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Share could not be settled"); } }} closeWithoutPayment={async () => { if (!confirm("Close this entire expense without recording payments? Use this only when settlement was recorded separately.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}/close`, "POST"); setModal(null); setToast("Expense closed without recording another payment."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Expense could not be closed"); } }} />}
-    {toast && <div className="toast"><span><Check size={16} /></span>{toast}</div>}
+    {toast && <div className="toast"><span><Check size={16} /></span>{toast}{addAnother && <button className="toast-action" onClick={() => { setToast(""); setAddAnother(false); setModal("bill"); }}>Add another</button>}</div>}
   </div>;
 }
 
@@ -373,28 +374,91 @@ function Modal({ title, subtitle, close, children }: { title: string; subtitle: 
 function BillModal({ data, currentUserId, initial, close, save }: { data: HouseholdData; currentUserId?: string; initial?: BillDetailData; close: () => void; save: (body: unknown, recurring?: unknown) => Promise<void> }) {
   const initialAllocations = Object.fromEntries((initial?.allocations ?? []).map((item) => [item.userId, initial?.bill.allocationMethod === "percentage" ? String((item.percentageBasisPoints ?? 0) / 100) : (item.amountCents / 100).toFixed(2)]));
   const defaultPayer = initial?.contributions[0]?.userId ?? data.members.find((member) => member.id === currentUserId)?.id ?? data.members[0]?.id ?? "";
-  const [name, setName] = useState(initial?.bill.name ?? ""); const [category, setCategory] = useState<BillCategory>(initial?.bill.category ?? "other"); const [amount, setAmount] = useState(initial ? (initial.bill.amountCents / 100).toFixed(2) : ""); const [estimated, setEstimated] = useState(initial?.bill.amountState === "estimated"); const [method, setMethod] = useState<"equal" | "percentage" | "fixed">((initial?.bill.allocationMethod as "equal" | "percentage" | "fixed") ?? "equal"); const [payerId, setPayerId] = useState(defaultPayer); const [allocationValues, setAllocationValues] = useState<Record<string, string>>(initialAllocations); const [makeRecurring, setMakeRecurring] = useState(false); const [cadence, setCadence] = useState<Recurring["cadence"]>("monthly"); const [nextDate, setNextDate] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
-  async function submit(event: React.FormEvent) {
-    event.preventDefault(); const amountCents = Math.round(Number(amount) * 100); if (!amountCents) return;
-    if (!payerId) { setError("Choose who paid the bill"); return; }
-    const contributions = [{ userId: payerId, amountCents }];
-    let allocations: Array<{ userId: string; amountCents: number; percentageBasisPoints?: number }>;
-    if (method === "equal") { const base = Math.floor(amountCents / data.members.length); let remainder = amountCents - base * data.members.length; allocations = data.members.map((member) => ({ userId: member.id, amountCents: base + (remainder-- > 0 ? 1 : 0) })); }
-    else if (method === "fixed") allocations = data.members.map((member) => ({ userId: member.id, amountCents: Math.round(Number(allocationValues[member.id] || 0) * 100) })).filter((item) => item.amountCents > 0);
-    else { const basis = data.members.map((member) => ({ userId: member.id, percentageBasisPoints: Math.round(Number(allocationValues[member.id] || 0) * 100) })); let allocated = 0; allocations = basis.map((item, index) => { const amountForMember = index === basis.length - 1 ? amountCents - allocated : Math.floor(amountCents * item.percentageBasisPoints / 10_000); allocated += amountForMember; return { ...item, amountCents: amountForMember }; }).filter((item) => item.amountCents > 0 || item.percentageBasisPoints > 0); }
-    if (makeRecurring && !nextDate) { setError("Choose the next occurrence date"); return; }
-    const body = { name, category, amountCents, periodLabel: initial?.bill.periodLabel ?? new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }), dueDate: initial?.bill.dueDate ?? null, amountState: estimated ? "estimated" : "final", allocationMethod: method, contributions, allocations, ...(initial ? { revision: initial.bill.revision } : {}) };
-    const recurring = makeRecurring ? { name, category, expectedAmountCents: amountCents, cadence, nextOccurrence: new Date(`${nextDate}T12:00:00Z`).toISOString(), allocationMethod: method, contributions, allocations, active: true } : undefined;
-    setBusy(true); setError(""); try { await save(body, recurring); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save bill"); setBusy(false); }
-  }
-  const allocationTotal = data.members.reduce((sum, member) => sum + Number(allocationValues[member.id] || 0), 0);
+  const [name, setName] = useState(initial?.bill.name ?? "");
+  const [category, setCategory] = useState<BillCategory>(initial?.bill.category ?? "other");
+  const [categoryTouched, setCategoryTouched] = useState(Boolean(initial));
+  const [amount, setAmount] = useState(initial ? (initial.bill.amountCents / 100).toFixed(2) : "");
+  const [estimated, setEstimated] = useState(initial?.bill.amountState === "estimated");
+  const [method, setMethod] = useState<"equal" | "percentage" | "fixed">((initial?.bill.allocationMethod as "equal" | "percentage" | "fixed") ?? "equal");
+  const [payerId, setPayerId] = useState(defaultPayer);
+  const [included, setIncluded] = useState<string[]>(initial ? initial.allocations.map((item) => item.userId) : data.members.map((member) => member.id));
+  const [allocationValues, setAllocationValues] = useState<Record<string, string>>(initialAllocations);
+  const [dueDate, setDueDate] = useState(initial?.bill.dueDate ? initial.bill.dueDate.slice(0, 10) : "");
+  const [makeRecurring, setMakeRecurring] = useState(false);
+  const [cadence, setCadence] = useState<Recurring["cadence"]>("monthly");
+  const [nextDate, setNextDate] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const amountCents = Math.round(Number(amount || 0) * 100);
+  const includedMembers = data.members.filter((member) => included.includes(member.id));
+  const guessCategory = (value: string): BillCategory | null => {
+    const text = value.toLowerCase();
+    const rules: Array<[RegExp, BillCategory]> = [[/rent|lease|mortgage/, "housing"], [/grocer|market|costco|aldi/, "groceries"], [/internet|wifi|electric|water|power|gas bill|utility|utilities|hydro/, "utilities"], [/takeout|dinner|lunch|pizza|sushi|thai|restaurant|coffee/, "dining"], [/uber|lyft|fuel|transit|parking|car /, "transport"], [/netflix|spotify|subscription|prime|icloud|hbo/, "subscriptions"], [/clean|supplies|paper towels|detergent|household/, "household"]];
+    for (const [pattern, match] of rules) if (pattern.test(text)) return match;
+    return null;
+  };
+  const suggestedCategory = guessCategory(name);
+  function updateName(value: string) { setName(value); if (!categoryTouched) { const guess = guessCategory(value); if (guess) setCategory(guess); } }
+  function toggleIncluded(memberId: string) { setIncluded((current) => current.includes(memberId) ? (current.length > 1 ? current.filter((id) => id !== memberId) : current) : [...current, memberId]); }
+  const equalShares = (() => { const count = includedMembers.length || 1; const base = Math.floor(amountCents / count); let remainder = amountCents - base * count; return Object.fromEntries(includedMembers.map((member) => [member.id, base + (remainder-- > 0 ? 1 : 0)])); })();
+  const allocationTotal = includedMembers.reduce((sum, member) => sum + Number(allocationValues[member.id] || 0), 0);
   const allocationTarget = method === "percentage" ? 100 : Number(amount || 0);
   const allocationRemaining = allocationTarget - allocationTotal;
   const allocationComplete = method === "equal" || Math.abs(allocationRemaining) < .001;
   const allocationProgress = method === "percentage"
     ? `${Math.abs(allocationRemaining).toFixed(2)}% ${allocationRemaining < 0 ? "over" : "remaining"}`
     : `${money(Math.round(Math.abs(allocationRemaining) * 100), data.household.currency)} ${allocationRemaining < 0 ? "over" : "remaining"}`;
-  return <Modal title={initial ? "Edit bill" : "Add a bill"} subtitle={data.household.name} close={close}><form onSubmit={submit}><div className="form-grid"><label className="full">Bill name<input value={name} onChange={(e) => setName(e.target.value)} required autoFocus /></label><label>Amount ({data.household.currency})<input type="number" inputMode="decimal" min="0.01" max="1000000000" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required /></label><label>Category<select value={category} onChange={(e) => setCategory(e.target.value as BillCategory)}>{BILL_CATEGORIES.map((item) => <option key={item} value={item}>{CATEGORY_LABELS[item]}</option>)}</select></label><label className="toggle-row full"><span><strong>Estimated amount</strong><small>Finalize it later with a revision.</small></span><input type="checkbox" checked={estimated} onChange={(e) => setEstimated(e.target.checked)} /></label><fieldset className="full"><legend>Who paid the external bill?</legend><div className="payer-options">{data.members.map((member) => <label key={member.id} className={`payer-option ${payerId === member.id ? "selected" : ""}`}><input type="checkbox" checked={payerId === member.id} onChange={() => setPayerId(member.id)} /><Avatar name={member.displayName} /><span><strong>{member.displayName}</strong><small>Paid the full {amount ? money(Math.round(Number(amount) * 100), data.household.currency) : "bill"}</small></span></label>)}</div><small className="valid-total">Choose one person. The full expense is credited to them.</small></fieldset><fieldset className="full"><legend>How is responsibility allocated?</legend><div className="segmented">{(["equal", "percentage", "fixed"] as const).map((item) => <button type="button" key={item} className={method === item ? "selected" : ""} onClick={() => setMethod(item)}>{item === "percentage" ? "Percent" : item[0].toUpperCase() + item.slice(1)}</button>)}</div>{method !== "equal" && <div className="money-rows">{data.members.map((member) => <label key={member.id}><span>{member.displayName}</span><span className="amount-field"><input aria-label={`${member.displayName} ${method === "percentage" ? "percentage" : "amount"}`} type="number" inputMode="decimal" min="0" step=".01" placeholder="0" value={allocationValues[member.id] ?? ""} onChange={(e) => setAllocationValues({ ...allocationValues, [member.id]: e.target.value })} /><em>{method === "percentage" ? "%" : data.household.currency}</em></span></label>)}</div>}<small className={allocationComplete ? "valid-total" : "invalid-total"}>{method === "equal" ? `Split equally across ${data.members.length} members` : allocationProgress}</small></fieldset>{!initial && <><label className="toggle-row full recurring-toggle"><span><strong>Make this expense recurring</strong><small>Create future bills automatically using this payer and allocation.</small></span><input type="checkbox" checked={makeRecurring} onChange={(e) => setMakeRecurring(e.target.checked)} /></label>{makeRecurring && <div className="recurring-details full"><label>Cadence<select value={cadence} onChange={(e) => setCadence(e.target.value as Recurring["cadence"])}><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select></label><label>Next occurrence<input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} required /></label></div>}</>}</div>{error && <p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" disabled={busy || !name || !amount || !payerId}>{busy ? "Saving…" : initial ? "Save changes" : makeRecurring ? "Add recurring bill" : "Add bill"}</button></div></form></Modal>;
+  const consequence = (() => {
+    if (!amountCents) return null;
+    const shareFor = (memberId: string) => method === "equal" ? (equalShares[memberId] ?? 0) : method === "fixed" ? Math.round(Number(allocationValues[memberId] || 0) * 100) : Math.round(amountCents * Number(allocationValues[memberId] || 0) / 100);
+    const debtors = includedMembers.filter((member) => member.id !== payerId).map((member) => ({ member, share: shareFor(member.id) })).filter((entry) => entry.share > 0);
+    if (!debtors.length) return null;
+    const payerName = payerId === currentUserId ? "you" : data.members.find((member) => member.id === payerId)?.displayName ?? "the payer";
+    if (payerId === currentUserId) {
+      const allEqual = debtors.every((entry) => entry.share === debtors[0].share);
+      const names = debtors.map((entry) => entry.member.id === currentUserId ? "you" : entry.member.displayName);
+      return allEqual ? `${names.join(" and ")} owe${names.length === 1 ? "s" : ""} you ${money(debtors[0].share, data.household.currency)}${debtors.length > 1 ? " each" : ""}` : `you're owed ${money(debtors.reduce((sum, entry) => sum + entry.share, 0), data.household.currency)}`;
+    }
+    const mine = debtors.find((entry) => entry.member.id === currentUserId);
+    return mine ? `you owe ${payerName} ${money(mine.share, data.household.currency)}` : `${payerName} is owed ${money(debtors.reduce((sum, entry) => sum + entry.share, 0), data.household.currency)}`;
+  })();
+  async function submit(event: React.FormEvent) {
+    event.preventDefault(); if (!amountCents) return;
+    if (!payerId) { setError("Choose who paid the bill"); return; }
+    if (!includedMembers.length) { setError("Include at least one person in the split"); return; }
+    const contributions = [{ userId: payerId, amountCents }];
+    let allocations: Array<{ userId: string; amountCents: number; percentageBasisPoints?: number }>;
+    if (method === "equal") allocations = includedMembers.map((member) => ({ userId: member.id, amountCents: equalShares[member.id] ?? 0 }));
+    else if (method === "fixed") allocations = includedMembers.map((member) => ({ userId: member.id, amountCents: Math.round(Number(allocationValues[member.id] || 0) * 100) })).filter((item) => item.amountCents > 0);
+    else { const basis = includedMembers.map((member) => ({ userId: member.id, percentageBasisPoints: Math.round(Number(allocationValues[member.id] || 0) * 100) })).filter((item) => item.percentageBasisPoints > 0); let allocated = 0; allocations = basis.map((item, index) => { const amountForMember = index === basis.length - 1 ? amountCents - allocated : Math.round(amountCents * item.percentageBasisPoints / 10_000); allocated += amountForMember; return { userId: item.userId, amountCents: amountForMember, percentageBasisPoints: item.percentageBasisPoints }; }); }
+    if (makeRecurring && !nextDate) { setError("Choose the next occurrence date"); return; }
+    const body = { name, category, amountCents, periodLabel: initial?.bill.periodLabel ?? new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }), dueDate: dueDate ? new Date(`${dueDate}T12:00:00Z`).toISOString() : null, amountState: estimated ? "estimated" : "final", allocationMethod: method, contributions, allocations, ...(initial ? { revision: initial.bill.revision } : {}) };
+    const recurring = makeRecurring ? { name, category, expectedAmountCents: amountCents, cadence, nextOccurrence: new Date(`${nextDate}T12:00:00Z`).toISOString(), allocationMethod: method, contributions, allocations, active: true } : undefined;
+    setBusy(true); setError(""); try { await save(body, recurring); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to save bill"); setBusy(false); }
+  }
+  return <Modal title={initial ? "Edit bill" : "Add a bill"} subtitle={data.household.name} close={close}><form className="abill" onSubmit={submit}>
+    <div className="abill-amtrow">
+      <label className="abill-amount"><span className="abill-cur">$</span><input type="number" inputMode="decimal" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" autoFocus={!initial} required /></label>
+      <div className="abill-est"><button type="button" className={estimated ? "" : "on"} onClick={() => setEstimated(false)}>Final</button><button type="button" className={estimated ? "on" : ""} onClick={() => setEstimated(true)}>Estimated</button></div>
+    </div>
+    <input className="abill-name" value={name} onChange={(e) => updateName(e.target.value)} placeholder="What was it? e.g. Groceries — week 29" required />
+    <div className="abill-chips">{BILL_CATEGORIES.map((item) => { const Icon = CATEGORY_ICONS[item] ?? CATEGORY_ICONS.other; return <button type="button" key={item} className={`abill-chip${category === item ? " on" : suggestedCategory === item && !categoryTouched ? " sug" : ""}`} onClick={() => { setCategory(item); setCategoryTouched(true); }}><Icon size={14} weight="duotone" />{CATEGORY_LABELS[item]}</button>; })}</div>
+    <span className="abill-lbl">PAID BY</span>
+    <div className="abill-members">{data.members.map((member) => <button type="button" key={member.id} className={`abill-m${payerId === member.id ? " on" : ""}`} onClick={() => setPayerId(member.id)}><Avatar name={member.displayName} /><small>{member.id === currentUserId ? "You" : member.displayName.split(" ")[0]}</small></button>)}</div>
+    <span className="abill-lbl">SPLIT BETWEEN · TAP TO INCLUDE{method === "equal" && includedMembers.length > 0 && amountCents > 0 ? ` · ${money(Math.floor(amountCents / includedMembers.length), data.household.currency)} EACH` : ""}</span>
+    <div className="abill-members split">{data.members.map((member) => { const isIn = included.includes(member.id); return <span key={member.id} className={`abill-m${isIn ? " on" : " off"}`}>
+      <button type="button" onClick={() => toggleIncluded(member.id)}><Avatar name={member.displayName} /></button>
+      {isIn && method !== "equal" ? <input className="abill-share" inputMode="decimal" value={allocationValues[member.id] ?? ""} placeholder={method === "percentage" ? "%" : "0.00"} onChange={(e) => setAllocationValues({ ...allocationValues, [member.id]: e.target.value })} /> : <small>{isIn ? (amountCents ? money(equalShares[member.id] ?? 0, data.household.currency) : (member.id === currentUserId ? "You" : member.displayName.split(" ")[0])) : "out"}</small>}
+    </span>; })}{method !== "equal" && <span className={`abill-progress${allocationComplete ? " ok" : ""}`}>{allocationComplete ? "✓ adds up" : allocationProgress}</span>}</div>
+    <div className="abill-seg"><button type="button" className={method === "equal" ? "on" : ""} onClick={() => setMethod("equal")}>Equal</button><button type="button" className={method === "percentage" ? "on" : ""} onClick={() => setMethod("percentage")}>Percentage</button><button type="button" className={method === "fixed" ? "on" : ""} onClick={() => setMethod("fixed")}>Exact</button></div>
+    <div className="abill-extras">
+      <span>Due</span><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+      {!initial && <><span>Repeats</span><select value={makeRecurring ? cadence : "no"} onChange={(e) => { if (e.target.value === "no") setMakeRecurring(false); else { setMakeRecurring(true); setCadence(e.target.value as Recurring["cadence"]); } }}><option value="no">doesn&#39;t repeat</option><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="quarterly">quarterly</option><option value="yearly">yearly</option></select>
+      {makeRecurring && <input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} aria-label="Next occurrence" />}</>}
+    </div>
+    {error && <p className="form-error">{error}</p>}
+    <button className="abill-cta" disabled={busy || !allocationComplete}>{busy ? "Saving…" : `${initial ? "Save bill" : "Add bill"}${consequence ? ` — ${consequence}` : ""}`}</button>
+  </form></Modal>;
 }
 
 function PaymentModal({ data, currentUserId, specific, close, save }: { data: HouseholdData; currentUserId: string; specific: (Balance & { billId?: string | null }) | null; close: () => void; save: (body: unknown) => Promise<void> }) {
