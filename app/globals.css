@@ -606,6 +606,18 @@ a { color: inherit; text-decoration: none; }
 .bill-personal.in { color: var(--teal); }
 .side-invite { display: inline-flex; align-items: center; gap: 7px; margin: 8px 12px 0; border: 0; background: transparent; color: var(--teal); font-weight: 750; font-size: 11px; cursor: pointer; padding: 4px 0; }
 .side-invite:hover { text-decoration: underline; }
+.abill-active { display: flex; align-items: center; gap: 12px; border-radius: 14px; background: var(--wash); padding: 11px 14px; }
+.abill-active > span { flex: 1; display: grid; gap: 1px; }
+.abill-active strong { font-size: 12px; }
+.abill-active small { color: var(--muted); font-size: 10px; }
+.abill-active input[type="checkbox"] { appearance: none; width: 40px; height: 24px; border-radius: 99px; background: color-mix(in srgb, var(--ink) 16%, transparent); position: relative; flex: none; cursor: pointer; margin: 0; transition: background .15s ease; }
+.abill-active input[type="checkbox"]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--canvas); transition: translate .15s ease; }
+.abill-active input[type="checkbox"]:checked { background: var(--teal); }
+.abill-active input[type="checkbox"]:checked::after { translate: 16px 0; }
+.abill-foot { display: flex; gap: 12px; align-items: center; }
+.abill-danger { border: 0; background: transparent; color: var(--coral); font-weight: 750; font-size: 11px; cursor: pointer; }
+.abill-cancel { border: 0; background: transparent; color: var(--muted); font-weight: 700; font-size: 11px; cursor: pointer; }
+.abill-cta.save { flex: 1; }
 .bill-line { width: 100%; display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .bill-line-text strong { display: block; font-size: 12.5px; letter-spacing: -.2px; color: var(--ink); }
 .bill-line-text small { color: var(--muted); font-size: 10px; }
