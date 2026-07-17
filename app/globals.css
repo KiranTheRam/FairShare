@@ -454,6 +454,44 @@ a { color: inherit; text-decoration: none; }
 .spw .password-field input::placeholder { color: var(--muted); }
 .spw-save { justify-self: end; border: 0; border-radius: 99px; padding: 9px 18px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 11.5px; cursor: pointer; }
 .spw-save:disabled { opacity: .5; }
+
+/* Add a bill (A2): amount-first, avatar splits with live shares */
+.abill { display: grid; gap: 13px; }
+.abill-amtrow { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: stretch; }
+.abill-amount { display: flex; align-items: center; gap: 4px; border-radius: 16px; background: var(--wash); padding: 6px 14px; }
+.abill-amount .abill-cur { font-size: 24px; font-weight: 700; color: var(--muted); font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.abill-amount input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font-size: 32px; font-weight: 700; letter-spacing: -1.2px; outline: none; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.abill-amount input::placeholder { color: var(--muted); }
+.abill-est { display: grid; gap: 4px; }
+.abill-est button { border: 0; border-radius: 10px; padding: 7px 12px; background: var(--wash); color: var(--muted); font-size: 10px; font-weight: 750; cursor: pointer; }
+.abill-est button.on { background: var(--mint); color: var(--teal); }
+.abill-name { width: 100%; height: 42px; border: 0; border-radius: 12px; background: var(--wash); color: var(--ink); padding: 0 13px; font-size: 12.5px; outline: none; }
+.abill-name::placeholder { color: var(--muted); }
+.abill-name:focus, .abill-amount:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--teal) 45%, transparent); }
+.abill-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.abill-chip { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 99px; padding: 6px 11px 6px 9px; background: var(--wash); color: var(--ink-soft); font-size: 10px; font-weight: 700; cursor: pointer; }
+.abill-chip.on { background: var(--mint); color: var(--teal); }
+.abill-chip.sug { outline: 1.5px dashed var(--teal); outline-offset: 1px; }
+.abill-lbl { color: var(--muted); font-size: 9.5px; font-weight: 800; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.abill-members { display: flex; gap: 12px; align-items: start; flex-wrap: wrap; }
+.abill-m { display: grid; justify-items: center; gap: 4px; border: 0; background: transparent; padding: 0; cursor: pointer; }
+.abill-m > button { border: 0; background: transparent; padding: 0; cursor: pointer; display: grid; }
+.abill-m .avatar { width: 38px; height: 38px; font-size: 12px; }
+.abill-m small { font-size: 9px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.abill-m.off { opacity: .32; }
+.abill-m.on .avatar { outline: 2.5px solid var(--teal); outline-offset: 2px; }
+.abill-share { width: 62px; height: 26px; border: 0; border-radius: 8px; background: var(--wash); color: var(--ink); text-align: center; font-size: 10.5px; font-weight: 700; outline: none; font-variant-numeric: tabular-nums; }
+.abill-share:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--teal) 45%, transparent); }
+.abill-progress { align-self: center; margin-left: auto; font-size: 10px; font-weight: 750; color: var(--coral); font-variant-numeric: tabular-nums; }
+.abill-progress.ok { color: var(--teal); }
+.abill-seg { display: flex; gap: 4px; background: var(--wash); border-radius: 12px; padding: 4px; }
+.abill-seg button { flex: 1; border: 0; border-radius: 9px; padding: 8px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 750; cursor: pointer; }
+.abill-seg button.on { background: var(--teal); color: var(--canvas); }
+.abill-extras { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: 11px; }
+.abill-extras input, .abill-extras select { height: 34px; border: 0; border-radius: 10px; background: var(--wash); color: var(--ink); padding: 0 10px; font-size: 11px; outline: none; color-scheme: inherit; }
+.abill-cta { border: 0; border-radius: 14px; padding: 13px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 13px; cursor: pointer; }
+.abill-cta:disabled { opacity: .5; cursor: default; }
+.toast-action { margin-left: 10px; border: 0; border-radius: 99px; padding: 5px 12px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 10.5px; cursor: pointer; }
 .bill-line { width: 100%; display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .bill-line-text strong { display: block; font-size: 12.5px; letter-spacing: -.2px; color: var(--ink); }
 .bill-line-text small { color: var(--muted); font-size: 10px; }
