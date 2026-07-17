@@ -338,6 +338,43 @@ a { color: inherit; text-decoration: none; }
 .glance-seg.category-household, .glance-keys i.category-household { background: #7c5f35; }
 .glance-seg.category-other, .glance-keys i.category-other { background: #65717c; }
 @media (max-width: 760px) { .glance-grid { grid-template-columns: 1fr; } .glance-big { font-size: 40px; } }
+.glance-tappable { cursor: pointer; }
+.glance-tappable:hover { border-color: var(--field-line); }
+
+/* Bills tab: flat stats, wash-band grouping, color-coded amounts */
+.bills-stats { display: flex; gap: 34px; padding: 4px 4px 20px; flex-wrap: wrap; }
+.bills-stats > div { display: grid; }
+.bills-stats small { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .09em; }
+.bills-stats b { font-size: 23px; letter-spacing: -.8px; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.bills-stats .accent b { color: var(--teal); }
+.bills-band { border-radius: 24px; background: var(--wash); padding: 18px 22px 10px; margin-top: 14px; }
+.bills-band.quiet { background: transparent; padding: 16px 22px 0; }
+.bills-band-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 2px; }
+.bills-band-head strong { font-size: 15px; letter-spacing: -.3px; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.bills-band-head small { color: var(--muted); font-size: 10px; }
+.bills-sum { margin-left: auto; font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bills-sum.open { color: var(--coral); }
+.bills-sum.done { color: var(--teal); }
+.bill-line { width: 100%; display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.bill-line-text strong { display: block; font-size: 12.5px; letter-spacing: -.2px; color: var(--ink); }
+.bill-line-text small { color: var(--muted); font-size: 10px; }
+.bill-line-amt { text-align: right; display: grid; }
+.bill-line-amt b { font-size: 13.5px; font-weight: 700; letter-spacing: -.3px; font-variant-numeric: tabular-nums; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.bill-line-amt small { font-size: 8px; font-weight: 800; letter-spacing: .05em; }
+.bill-line.open .bill-line-amt b, .bill-line.open .bill-line-amt small { color: var(--coral); }
+.bill-line.done .bill-line-amt b, .bill-line.done .bill-line-amt small { color: var(--teal); }
+.bills-band.quiet .bill-line { opacity: .65; }
+.bills-band.quiet .bill-line:hover { opacity: 1; }
+.bill-cat { align-self: center; }
+.bill-cat.cat-housing { color: color-mix(in srgb, #5968c9 62%, var(--ink) 38%); }
+.bill-cat.cat-utilities { color: color-mix(in srgb, #ad7900 62%, var(--ink) 38%); }
+.bill-cat.cat-groceries { color: color-mix(in srgb, #168492 62%, var(--ink) 38%); }
+.bill-cat.cat-dining { color: color-mix(in srgb, #bd681f 62%, var(--ink) 38%); }
+.bill-cat.cat-transport { color: color-mix(in srgb, #3473c8 62%, var(--ink) 38%); }
+.bill-cat.cat-subscriptions { color: color-mix(in srgb, #8a4fb1 62%, var(--ink) 38%); }
+.bill-cat.cat-household { color: color-mix(in srgb, #8a6a3c 62%, var(--ink) 38%); }
+.bill-cat.cat-other { color: color-mix(in srgb, #65717c 62%, var(--ink) 38%); }
+@media (max-width: 640px) { .bills-stats { gap: 22px; } .bills-band { padding: 15px 16px 8px; } .bills-band.quiet { padding: 14px 16px 0; } }
 .action-chip { padding: 6px 9px; border-radius: 8px; background: var(--yellow-soft); color: #86600d; font-size: 9.5px; font-weight: 750; }
 .recent-card { grid-column: 1 / -1; }
 .bill-list { display: grid; }
