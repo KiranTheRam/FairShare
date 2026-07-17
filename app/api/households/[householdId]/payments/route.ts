@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getDb } from "@/db";
-import { billChangeHistory, bills, obligations, payments } from "@/db/schema";
+import { billChangeHistory, bills, obligations, paymentClaims, payments } from "@/db/schema";
 import { apiRoute } from "@/lib/api";
 import { requireMutationUser } from "@/lib/auth";
 import { requireFinancialAccess, validateMembershipIds, writeAudit } from "@/lib/access";
@@ -8,7 +8,7 @@ import { ApiError, parseJson } from "@/lib/http";
 import { outstandingForBillPair, outstandingForPair } from "@/lib/ledger";
 import { areObligationsSettled } from "@/lib/ledger-calculation";
 import { notifyUser } from "@/lib/notifications";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, lte, sql } from "drizzle-orm";
 import { paymentSchema } from "@/lib/validation";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ householdId: string }> }) {
@@ -45,6 +45,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ho
         : await outstandingForPair(householdId, input.payerUserId, input.recipientUserId);
       if (input.amountCents > outstanding) throw new ApiError(400, `Payment exceeds the outstanding balance of ${(outstanding / 100).toFixed(2)} ${household.currency}`, "payment_exceeds_balance");
       const [created] = await tx.insert(payments).values({ idempotencyKey: input.idempotencyKey, householdId, billId: input.billId ?? null, payerUserId: input.payerUserId, recipientUserId: input.recipientUserId, amountCents: input.amountCents, note: input.note, paidAt: input.paidAt ? new Date(input.paidAt) : new Date(), createdByUserId: user.id }).returning();
+      // A confirmed payment settles any matching pending claim from the payer,
+      // as long as the payment covers the claimed amount.
+      await tx.update(paymentClaims).set({ status: "confirmed", resolvedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(paymentClaims.householdId, householdId), eq(paymentClaims.debtorUserId, input.payerUserId), eq(paymentClaims.creditorUserId, input.recipientUserId), eq(paymentClaims.status, "pending"), lte(paymentClaims.amountCents, input.amountCents)));
       if (input.billId) {
         const [activeObligations, billPayments] = await Promise.all([
           tx.select({ debtorUserId: obligations.debtorUserId, creditorUserId: obligations.creditorUserId, amountCents: obligations.originalAmountCents }).from(obligations).where(and(eq(obligations.billId, input.billId), eq(obligations.active, true))),

@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { bigint, boolean, customType, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { BillCategory } from "@/lib/categories";
 
@@ -139,6 +139,18 @@ export const payments = pgTable("payments", {
   createdByUserId: uuid("created_by_user_id").notNull().references(() => users.id),
   ...createdUpdated,
 }, (table) => [uniqueIndex("payments_idempotency_key_unique").on(table.idempotencyKey), index("payments_household_date_idx").on(table.householdId, table.paidAt), index("payments_bill_idx").on(table.billId)]);
+
+export const paymentClaims = pgTable("payment_claims", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  householdId: uuid("household_id").notNull().references(() => households.id, { onDelete: "cascade" }),
+  debtorUserId: uuid("debtor_user_id").notNull().references(() => users.id),
+  creditorUserId: uuid("creditor_user_id").notNull().references(() => users.id),
+  amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
+  note: text("note"),
+  status: text("status", { enum: ["pending", "cancelled", "dismissed", "confirmed"] }).notNull().default("pending"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  ...createdUpdated,
+}, (table) => [index("payment_claims_household_idx").on(table.householdId), uniqueIndex("payment_claims_pending_pair_unique").on(table.householdId, table.debtorUserId, table.creditorUserId).where(sql`${table.status} = 'pending'`)]);
 
 export const billAttachments = pgTable("bill_attachments", {
   id: uuid("id").primaryKey().defaultRandom(),
