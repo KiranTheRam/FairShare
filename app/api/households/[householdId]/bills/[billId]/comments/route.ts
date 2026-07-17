@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ho
     if (!bill) throw new ApiError(404, "Bill not found", "not_found");
     const [comment] = await getDb().insert(billComments).values({ billId, authorUserId: user.id, body: input.body }).returning();
     await writeAudit(request, user, "bill.commented", "bill_comment", comment.id, householdId);
-    await notifyHousehold({ householdId, excludeUserId: user.id, type: "bill", title: "New comment", body: `${user.displayName} commented on ${bill.name}.`, targetPath: "/" });
+    await notifyHousehold({ householdId, excludeUserId: user.id, type: "bill", title: "New comment", body: `${user.displayName} commented on ${bill.name}.`, targetPath: `/?bill=${billId}` });
     return { comment };
   }, 201);
 }

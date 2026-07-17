@@ -24,7 +24,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ho
       return settled;
     });
     await writeAudit(request, user, "bill.closed_without_payment", "bill", billId, householdId);
-    await notifyHousehold({ householdId, excludeUserId: user.id, type: "bill", title: "Expense closed", body: `${bill.name} was closed without recording another payment.`, targetPath: "/" });
+    await notifyHousehold({ householdId, excludeUserId: user.id, type: "bill", title: "Expense closed", body: `${bill.name} was closed without recording another payment.`, targetPath: `/?bill=${billId}` });
     return { bill };
   });
 }
