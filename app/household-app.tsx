@@ -242,13 +242,15 @@ function Overview({ data, user, net, onBill, onPayment, onNudge, onBillDetail, o
         <span className="glance-sub">{debtorNames.length ? `from ${debtorNames.join(" and ")} · ` : ""}{openBillCount} open bill{openBillCount === 1 ? "" : "s"}</span>
         {receiptTotal > 0 && <span className="glance-delta">▼ {money(receiptTotal, currency)} less than yesterday{latestReceipt ? ` — ${latestReceipt.payerName} settled ${latestReceipt.billName ?? "a payment"}` : ""}</span>}
       </section>
-      {nextRecurring && nextDue && <section className="glance-due"><span className="glance-cal"><b>{nextDue.getDate()}</b><small>{nextDue.toLocaleDateString(undefined, { month: "short" }).toUpperCase()}</small></span><span className="glance-due-what"><strong>{nextRecurring.name}</strong><small>recurring · splits {nextRecurring.templateConfig.allocations.length} way{nextRecurring.templateConfig.allocations.length === 1 ? "" : "s"}</small></span><strong className="glance-due-amt">{nextRecurring.expectedAmountCents === null ? "varies" : money(nextRecurring.expectedAmountCents, currency)}</strong></section>}
+      {nextRecurring && nextDue && <section className="glance-due"><span className="glance-when">{nextDue.toLocaleDateString(undefined, { month: "short" }).toUpperCase()} {nextDue.getDate()}</span><span className="glance-due-what"><strong>{nextRecurring.name}</strong><small>recurring · splits {nextRecurring.templateConfig.allocations.length} way{nextRecurring.templateConfig.allocations.length === 1 ? "" : "s"}</small></span><strong className="glance-due-amt">{nextRecurring.expectedAmountCents === null ? "varies" : money(nextRecurring.expectedAmountCents, currency)}</strong></section>}
       <button className="glance-add" onClick={onBill}><Plus size={17} /> Add a bill</button>
     </div>
     <div className="glance-col">
-      {owedToMe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="in" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
-      {iOwe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="out" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
-      {others.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine={false} direction="other" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
+      {data.balances.length > 0 && <div className="glance-zone">
+        {owedToMe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="in" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
+        {iOwe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="out" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
+        {others.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine={false} direction="other" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onBillDetail={onBillDetail} />)}
+      </div>}
       {!data.balances.length && <section className="glance-card glance-settled"><Check size={26} /><strong>Everyone is settled up</strong><small>New bills will appear here as balances open.</small></section>}
     </div>
   </div>;
