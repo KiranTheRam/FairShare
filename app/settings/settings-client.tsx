@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { PasswordInput } from "@/app/password-input";
 import { isThemeId, THEMES, type ThemeId } from "@/lib/themes";
 
-type SessionData = { user: { id: string; email: string; displayName: string }; csrfToken: string };
+type SessionData = { user: { id: string; email: string; displayName: string; role?: string }; csrfToken: string };
 type NotificationPrefs = { billsEnabled: boolean; paymentsEnabled: boolean; balanceChangesEnabled: boolean };
 
 const initials = (name: string) => name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
@@ -144,52 +144,48 @@ export function SettingsClient() {
       <div className="brand"><span className="brand-mark"><span className="roof" /><span className="door" /></span><span>FairShare</span></div>
     </header>
     <main className="settings-wrap">
-      <div className="page-heading"><div><p className="eyebrow">YOUR ACCOUNT</p><div className="page-title-row"><h1>Settings</h1>{savedNote && <span className="settings-saved"><Check size={14} /> {savedNote}</span>}</div><p>Appearance, notifications, and security for your account.</p></div></div>
       {error && <div className="error-banner">{error}<button onClick={() => setError("")}>Dismiss</button></div>}
-      <div className="settings-account"><span className="avatar mint" aria-hidden>{initials(session?.user.displayName ?? "")}</span><span><strong>{session?.user.displayName}</strong><small>{session?.user.email}</small></span><span className="status-pill done">Active</span></div>
+      <div className="sprofile">
+        <span className="avatar mint" aria-hidden>{initials(session?.user.displayName ?? "")}</span>
+        <span className="sprofile-id"><strong>{session?.user.displayName}</strong><small>{session?.user.email}{session?.user.role ? ` · ${session.user.role}` : ""}</small></span>
+        {savedNote && <span className="settings-saved"><Check size={14} /> {savedNote}</span>}
+        <button className="sprofile-out" onClick={() => void logout()}><LogOut size={15} /> Sign out</button>
+      </div>
 
-      <section className="settings-section">
-        <h2>Appearance</h2>
-        <p>Your theme is saved to your account and follows you to every device.</p>
-        <div className="theme-grid">{THEMES.map((item) => <button key={item.id} className={`theme-card ${theme === item.id ? "selected" : ""}`} onClick={() => void chooseTheme(item.id)} aria-pressed={theme === item.id}>
-          <span className="theme-swatch" style={{ background: item.preview.canvas }} aria-hidden>
-            <span className="swatch-hero" style={{ background: item.preview.hero }} />
-            <span className="swatch-row" style={{ background: item.preview.paper, color: item.preview.primary }}><span style={{ background: item.preview.primary }} /><span style={{ background: item.preview.accent }} /><i /></span>
-          </span>
-          <span className="theme-meta"><strong>{item.name}</strong><small>{item.tagline}</small></span>
-          {theme === item.id && <span className="theme-check"><Check size={13} /></span>}
-        </button>)}</div>
-      </section>
+      <div className="settings-cols">
+        <div className="settings-col">
+          <section className="ssec">
+            <h2>Appearance<small>saved to your account, follows you to every device</small></h2>
+            <div className="stheme-grid">{THEMES.map((item) => <button key={item.id} className={`stheme${theme === item.id ? " on" : ""}`} onClick={() => void chooseTheme(item.id)} aria-pressed={theme === item.id} title={item.tagline}>
+              <span className="stheme-chip" style={{ background: item.preview.canvas }} aria-hidden><i className="stheme-hero" style={{ background: item.preview.hero }} /><i className="stheme-paper" style={{ background: item.preview.paper }} /><i className="stheme-dot" style={{ background: item.preview.primary }} /></span>
+              <small>{item.name}</small>
+            </button>)}</div>
+          </section>
 
-      <section className="settings-section">
-        <h2>Notifications</h2>
-        <p>Choose which Household events create in-app and push notifications.</p>
-        <div className="notification-preferences">
-          <label><span><strong>Bills and material edits</strong><small>New, edited, finalized, and recurring bills</small></span><input type="checkbox" checked={preferences.billsEnabled} onChange={() => void togglePreference("billsEnabled")} /></label>
-          <label><span><strong>Payments involving you</strong><small>Bill-specific and general repayments</small></span><input type="checkbox" checked={preferences.paymentsEnabled} onChange={() => void togglePreference("paymentsEnabled")} /></label>
-          <label><span><strong>Balance changes</strong><small>Reminders and meaningful changes to what you owe or are owed</small></span><input type="checkbox" checked={preferences.balanceChangesEnabled} onChange={() => void togglePreference("balanceChangesEnabled")} /></label>
+          <section className="ssec">
+            <h2>Password<small>changing it signs out every device</small></h2>
+            <form className="spw" onSubmit={changePassword}>
+              <PasswordInput autoComplete="current-password" placeholder="Current password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
+              <PasswordInput autoComplete="new-password" placeholder="New password — 12+ chars with upper, lower, and a number" minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+              <button className="spw-save" disabled={passwordBusy}>{passwordBusy ? "Changing…" : "Change password"}</button>
+            </form>
+          </section>
         </div>
-        {!vapidPublicKey ? <div className="push-status"><strong>Push notifications need server setup</strong><p>The FairShare operator must generate VAPID keys, set <code>VAPID_SUBJECT</code>, <code>VAPID_PUBLIC_KEY</code>, and <code>VAPID_PRIVATE_KEY</code> in the deployment environment, then restart FairShare. This cannot be enabled from a user account.</p></div>
-          : pushSupported === false ? <div className="push-status"><strong>This browser cannot receive Web Push</strong><p>Use a supported browser. On iPhone or iPad, install FairShare to the Home Screen and open the installed app before enabling push.</p></div>
-          : <div className="notification-preferences push-preference"><label><span><strong>Push on this device</strong><small>{pushPermission === "denied" ? "Blocked in browser or device settings" : pushEnabled ? "Notifications can appear when FairShare is closed" : "Enable alerts from this browser or installed app"}</small></span><input type="checkbox" checked={pushEnabled} disabled={pushBusy || pushSupported !== true} onChange={() => void togglePush()} /></label></div>}
-      </section>
 
-      <section className="settings-section">
-        <h2>Change password</h2>
-        <p>Changing your password signs out every device, including this one.</p>
-        <form className="settings-password-form" onSubmit={changePassword}>
-          <label>Current password<PasswordInput autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required /></label>
-          <label>New password<PasswordInput autoComplete="new-password" placeholder="12+ characters with upper, lower, and a number" minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required /></label>
-          <button className="secondary-button" disabled={passwordBusy}>{passwordBusy ? "Changing…" : "Change password"}</button>
-        </form>
-      </section>
-
-      <section className="settings-section">
-        <div className="settings-signout">
-          <p>Signing out ends your session on this device only.</p>
-          <button className="secondary-button" onClick={() => void logout()}><LogOut size={16} /> Sign out</button>
+        <div className="settings-col">
+          <section className="ssec">
+            <h2>Notifications<small>in-app and push, per event</small></h2>
+            <div className="szone">
+              <label className="srow"><span><strong>Bills and material edits</strong><small>New, edited, finalized, and recurring bills</small></span><input type="checkbox" checked={preferences.billsEnabled} onChange={() => void togglePreference("billsEnabled")} /></label>
+              <label className="srow"><span><strong>Payments involving you</strong><small>Bill-specific and general repayments</small></span><input type="checkbox" checked={preferences.paymentsEnabled} onChange={() => void togglePreference("paymentsEnabled")} /></label>
+              <label className="srow"><span><strong>Balance changes</strong><small>Reminders and meaningful changes to what you owe or are owed</small></span><input type="checkbox" checked={preferences.balanceChangesEnabled} onChange={() => void togglePreference("balanceChangesEnabled")} /></label>
+              {!vapidPublicKey ? <div className="srow snote"><span><strong>Push notifications need server setup</strong><small>The FairShare operator must set <code>VAPID_SUBJECT</code>, <code>VAPID_PUBLIC_KEY</code>, and <code>VAPID_PRIVATE_KEY</code>, then restart FairShare.</small></span></div>
+                : pushSupported === false ? <div className="srow snote"><span><strong>This browser cannot receive Web Push</strong><small>On iPhone or iPad, install FairShare to the Home Screen and open the installed app before enabling push.</small></span></div>
+                : <label className="srow"><span><strong>Push on this device</strong><small>{pushPermission === "denied" ? "Blocked in browser or device settings" : pushEnabled ? "Notifications can appear when FairShare is closed" : "Enable alerts from this browser or installed app"}</small></span><input type="checkbox" checked={pushEnabled} disabled={pushBusy || pushSupported !== true} onChange={() => void togglePush()} /></label>}
+            </div>
+          </section>
         </div>
-      </section>
+      </div>
     </main>
   </div>;
 }

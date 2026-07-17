@@ -413,6 +413,47 @@ a { color: inherit; text-decoration: none; }
 .activity-right .amt-in { color: var(--teal); }
 .activity-right .amt-bill { color: var(--ink); }
 .activity-right .amt-close { color: var(--muted); font-weight: 600; }
+
+/* Settings: profile header, theme swatches, wash-zone toggles */
+.sprofile { display: flex; align-items: center; gap: 14px; padding: 4px 0 22px; }
+.sprofile .avatar { width: 52px; height: 52px; font-size: 17px; }
+.sprofile-id strong { display: block; font-size: 19px; letter-spacing: -.4px; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.sprofile-id small { color: var(--muted); font-size: 11.5px; }
+.sprofile-out { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--coral); font-weight: 750; font-size: 11.5px; cursor: pointer; }
+.settings-cols { display: grid; gap: 28px; }
+@media (min-width: 900px) { .settings-cols { grid-template-columns: 1fr 1fr; gap: 36px; align-items: start; } }
+.settings-col { display: grid; gap: 26px; align-content: start; }
+.ssec h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: -.3px; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.ssec h2 small { color: var(--muted); font-weight: 500; font-size: 10.5px; margin-left: 8px; font-family: system-ui, sans-serif; letter-spacing: 0; }
+.stheme-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+.stheme { display: grid; gap: 6px; justify-items: center; border: 0; background: transparent; padding: 0; cursor: pointer; }
+.stheme small { font-size: 9.5px; font-weight: 700; color: var(--muted); }
+.stheme.on small { color: var(--teal); }
+.stheme-chip { position: relative; width: 100%; height: 58px; border-radius: 14px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
+.stheme.on .stheme-chip { outline: 2.5px solid var(--teal); outline-offset: 2px; }
+.stheme-chip i { position: absolute; font-style: normal; }
+.stheme-hero { left: 7px; top: 7px; right: 22px; height: 16px; border-radius: 6px; }
+.stheme-paper { left: 7px; bottom: 7px; width: 34px; height: 15px; border-radius: 5px; }
+.stheme-dot { right: 8px; bottom: 9px; width: 10px; height: 10px; border-radius: 50%; }
+.szone { border-radius: 22px; background: var(--wash); padding: 4px 16px; }
+.srow { display: flex; align-items: center; gap: 12px; padding: 13px 2px; }
+.srow + .srow { border-top: 1px solid color-mix(in srgb, var(--ink) 7%, transparent); }
+.srow > span { display: grid; gap: 1px; flex: 1; min-width: 0; }
+.srow strong { font-size: 12.5px; }
+.srow small { color: var(--muted); font-size: 10.5px; }
+.srow small code { font-size: .95em; color: var(--ink-soft); }
+.srow input[type="checkbox"] { appearance: none; width: 40px; height: 24px; border-radius: 99px; background: color-mix(in srgb, var(--ink) 16%, transparent); position: relative; flex: none; cursor: pointer; margin: 0; transition: background .15s ease; }
+.srow input[type="checkbox"]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--canvas); transition: translate .15s ease; }
+.srow input[type="checkbox"]:checked { background: var(--teal); }
+.srow input[type="checkbox"]:checked::after { translate: 16px 0; }
+.srow input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
+.srow input[type="checkbox"]:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.spw { display: grid; gap: 9px; }
+.spw .password-field input { width: 100%; height: 42px; border: 0; border-radius: 12px; background: var(--wash); color: var(--ink); padding: 0 40px 0 13px; font-size: 12px; outline: none; }
+.spw .password-field input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--teal) 45%, transparent); }
+.spw .password-field input::placeholder { color: var(--muted); }
+.spw-save { justify-self: end; border: 0; border-radius: 99px; padding: 9px 18px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 11.5px; cursor: pointer; }
+.spw-save:disabled { opacity: .5; }
 .bill-line { width: 100%; display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .bill-line-text strong { display: block; font-size: 12.5px; letter-spacing: -.2px; color: var(--ink); }
 .bill-line-text small { color: var(--muted); font-size: 10px; }
