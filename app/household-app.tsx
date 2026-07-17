@@ -44,7 +44,7 @@ export function HouseholdApp() {
   const [error, setError] = useState("");
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
   const [billDetail, setBillDetail] = useState<BillDetailData | null>(null);
-  const [paymentContext, setPaymentContext] = useState<(Balance & { billId?: string | null }) | null>(null);
+  const [paymentContext, setPaymentContext] = useState<(Balance & { billId?: string | null; billName?: string }) | null>(null);
   const [selectedRecurring, setSelectedRecurring] = useState<Recurring | null>(null);
 
   useEffect(() => {
@@ -122,7 +122,7 @@ export function HouseholdApp() {
     setBillDetail(body); setModal("detail");
   }
 
-  function openPayment(context: (Balance & { billId?: string | null }) | null = null) { setPaymentContext(context); setModal("payment"); }
+  function openPayment(context: (Balance & { billId?: string | null; billName?: string }) | null = null) { setPaymentContext(context); setModal("payment"); }
 
   async function addComment(billId: string, body: string) {
     await mutate(`/api/households/${householdId}/bills/${billId}/comments`, "POST", { body });
@@ -191,7 +191,7 @@ export function HouseholdApp() {
     {modal === "payment" && data && <PaymentModal data={data} currentUserId={session?.user.id ?? ""} specific={paymentContext} close={() => { setModal(null); setPaymentContext(null); }} save={async (body) => { await mutate(`/api/households/${householdId}/payments`, "POST", body); setModal(null); setPaymentContext(null); setToast("Payment confirmed."); await refresh(); }} />}
     {modal === "recurring-edit" && data && selectedRecurring && <RecurringModal data={data} initial={selectedRecurring} close={() => setModal(null)} save={async (body) => { await mutate(`/api/households/${householdId}/recurring/${selectedRecurring.id}`, "PATCH", body); setModal(null); setSelectedRecurring(null); setToast("Future recurring bills will use the updated schedule."); await refresh(); }} />}
     {modal === "invite" && data && <InviteModal householdName={data.household.name} householdId={householdId} mutate={mutate} close={() => setModal(null)} />}
-    {modal === "detail" && billDetail && <BillDetailModal detail={billDetail} userId={session?.user.id ?? ""} currency={data?.household.currency ?? "USD"} addComment={(body) => addComment(billDetail.bill.id, body)} uploadAttachment={(file) => uploadAttachment(billDetail.bill.id, file)} removeAttachment={(attachmentId) => removeAttachment(billDetail.bill.id, attachmentId)} attachmentHref={(attachmentId) => `/api/households/${householdId}/bills/${billDetail.bill.id}/attachments/${attachmentId}`} close={() => setModal(null)} edit={() => setModal("edit")} remove={async () => { if (!confirm("Remove this bill and recalculate Household balances? The audit record is retained.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "DELETE"); setModal(null); setToast("Bill removed and balances recalculated."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Bill could not be removed"); } }} record={(item) => openPayment({ billId: billDetail.bill.id, payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, payerName: item.debtorName, recipientName: item.creditorName, amountCents: item.outstandingAmountCents })} settle={async (item) => { if (!confirm(`Confirm receipt of ${money(item.outstandingAmountCents, data?.household.currency ?? "USD")} from ${item.debtorName} and mark this share settled?`)) return; try { await mutate(`/api/households/${householdId}/payments`, "POST", { idempotencyKey: crypto.randomUUID(), billId: billDetail.bill.id, payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, amountCents: item.outstandingAmountCents, note: "Marked settled", paidAt: new Date().toISOString() }); setToast(`${item.debtorName}’s share was settled.`); await refresh(); await openBill(billDetail.bill.id); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Share could not be settled"); } }} closeWithoutPayment={async () => { if (!confirm("Close this entire expense without recording payments? Use this only when settlement was recorded separately.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}/close`, "POST"); setModal(null); setToast("Expense closed without recording another payment."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Expense could not be closed"); } }} />}
+    {modal === "detail" && billDetail && <BillDetailModal detail={billDetail} userId={session?.user.id ?? ""} currency={data?.household.currency ?? "USD"} addComment={(body) => addComment(billDetail.bill.id, body)} uploadAttachment={(file) => uploadAttachment(billDetail.bill.id, file)} removeAttachment={(attachmentId) => removeAttachment(billDetail.bill.id, attachmentId)} attachmentHref={(attachmentId) => `/api/households/${householdId}/bills/${billDetail.bill.id}/attachments/${attachmentId}`} close={() => setModal(null)} edit={() => setModal("edit")} remove={async () => { if (!confirm("Remove this bill and recalculate Household balances? The audit record is retained.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "DELETE"); setModal(null); setToast("Bill removed and balances recalculated."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Bill could not be removed"); } }} record={(item) => openPayment({ billId: billDetail.bill.id, billName: billDetail.bill.name, payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, payerName: item.debtorName, recipientName: item.creditorName, amountCents: item.outstandingAmountCents })} settle={async (item) => { if (!confirm(`Confirm receipt of ${money(item.outstandingAmountCents, data?.household.currency ?? "USD")} from ${item.debtorName} and mark this share settled?`)) return; try { await mutate(`/api/households/${householdId}/payments`, "POST", { idempotencyKey: crypto.randomUUID(), billId: billDetail.bill.id, payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, amountCents: item.outstandingAmountCents, note: "Marked settled", paidAt: new Date().toISOString() }); setToast(`${item.debtorName}’s share was settled.`); await refresh(); await openBill(billDetail.bill.id); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Share could not be settled"); } }} closeWithoutPayment={async () => { if (!confirm("Close this entire expense without recording payments? Use this only when settlement was recorded separately.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}/close`, "POST"); setModal(null); setToast("Expense closed without recording another payment."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Expense could not be closed"); } }} />}
     {toast && <div className="toast"><span><Check size={16} /></span>{toast}{addAnother && <button className="toast-action" onClick={() => { setToast(""); setAddAnother(false); setModal("bill"); }}>Add another</button>}</div>}
   </div>;
 }
@@ -471,11 +471,45 @@ function BillModal({ data, currentUserId, initial, close, save }: { data: Househ
   </form></Modal>;
 }
 
-function PaymentModal({ data, currentUserId, specific, close, save }: { data: HouseholdData; currentUserId: string; specific: (Balance & { billId?: string | null }) | null; close: () => void; save: (body: unknown) => Promise<void> }) {
-  const choices = (specific ? [specific] : data.balances).filter((item) => item.recipientUserId === currentUserId); const [index, setIndex] = useState(0); const [amount, setAmount] = useState(specific ? (specific.amountCents / 100).toFixed(2) : ""); const [note, setNote] = useState(""); const [idempotencyKey] = useState(() => crypto.randomUUID()); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const balance = choices[index];
-  async function submit(event: React.FormEvent) { event.preventDefault(); if (!balance) return; setBusy(true); setError(""); try { await save({ idempotencyKey, billId: specific?.billId ?? null, payerUserId: balance.payerUserId, recipientUserId: balance.recipientUserId, amountCents: Math.round(Number(amount) * 100), note, paidAt: new Date().toISOString() }); } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to confirm payment"); setBusy(false); } }
-  return <Modal title="Confirm a payment" subtitle={specific ? "Confirm money received for this bill" : "Confirm money you received toward a balance"} close={close}>{balance ? <form onSubmit={submit}><div className="form-grid"><label className="full">Balance<select value={index} disabled={Boolean(specific)} onChange={(e) => { setIndex(Number(e.target.value)); setAmount(""); }}>{choices.map((item, itemIndex) => <option key={`${item.payerUserId}:${item.recipientUserId}`} value={itemIndex}>{item.payerName} → {item.recipientName} · {money(item.amountCents, data.household.currency)}</option>)}</select></label><label className="full">Amount received<input type="number" inputMode="decimal" min="0.01" max={(balance.amountCents / 100).toFixed(2)} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required /></label><label className="full">Note (optional)<input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} /></label></div>{error && <p className="form-error">{error}</p>}<div className="modal-actions"><button type="button" className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" disabled={busy || !amount}>{busy ? "Confirming…" : "Confirm payment"}</button></div></form> : <p>You have no received payments to confirm.</p>}</Modal>;
-}
+function PaymentModal({ data, currentUserId, specific, close, save }: { data: HouseholdData; currentUserId: string; specific: (Balance & { billId?: string | null; billName?: string }) | null; close: () => void; save: (body: unknown) => Promise<void> }) {
+  const billLocked = Boolean(specific?.billId);
+  const choices = billLocked && specific ? [specific] : data.balances.filter((item) => item.recipientUserId === currentUserId);
+  const initialIndex = specific && !billLocked ? Math.max(choices.findIndex((item) => item.payerUserId === specific.payerUserId), 0) : 0;
+  const [index, setIndex] = useState(initialIndex);
+  const balance = choices[index];
+  const maxCents = specific && billLocked ? specific.amountCents : balance?.amountCents ?? 0;
+  const [amount, setAmount] = useState(maxCents ? (maxCents / 100).toFixed(2) : "");
+  const [note, setNote] = useState("");
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const amountCents = Math.round(Number(amount || 0) * 100);
+  const payerLabel = balance?.payerName ?? "them";
+  const halfCents = Math.round(maxCents / 2);
+  const chip = amountCents === maxCents ? "all" : amountCents === halfCents ? "half" : "custom";
+  const overMax = amountCents > maxCents;
+  const consequence = !amountCents ? null
+    : overMax ? { tone: "part", text: `more than ${payerLabel} owes — max ${money(maxCents, data.household.currency)}` }
+    : amountCents === maxCents ? { tone: "full", text: billLocked ? `✓ clears ${payerLabel}’s share of ${specific?.billName ?? "this bill"}` : `✓ settles everything ${payerLabel} owes you` }
+    : { tone: "part", text: `leaves ${money(maxCents - amountCents, data.household.currency)} still open` };
+  function pick(nextIndex: number) { setIndex(nextIndex); const next = choices[nextIndex]; setAmount(next ? (next.amountCents / 100).toFixed(2) : ""); }
+  async function submit(event: React.FormEvent) {
+    event.preventDefault(); if (!balance || !amountCents || overMax) return;
+    setBusy(true); setError("");
+    try { await save({ idempotencyKey, billId: specific?.billId ?? null, payerUserId: balance.payerUserId, recipientUserId: balance.recipientUserId, amountCents, note, paidAt: new Date().toISOString() }); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to confirm payment"); setBusy(false); }
+  }
+  return <Modal title="Confirm payment received" subtitle={billLocked ? `Toward ${specific?.billName ?? "a bill"}` : "Money you received toward a balance"} close={close}>{balance ? <form className="pm" onSubmit={submit}>
+    <span className="pm-lbl">WHO PAID YOU?</span>
+    <div className="pm-pills">{choices.map((item, itemIndex) => <button type="button" key={`${item.payerUserId}:${item.recipientUserId}`} className={`pm-pill${index === itemIndex ? " on" : ""}`} disabled={billLocked} onClick={() => pick(itemIndex)}><Avatar name={item.payerName ?? ""} /><small>{money(item.amountCents, data.household.currency)}</small></button>)}</div>
+    <label className="pm-amount"><span>$</span><input type="number" inputMode="decimal" min="0.01" max={(maxCents / 100).toFixed(2)} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus /></label>
+    <div className="pm-chips"><button type="button" className={chip === "all" ? "on" : ""} onClick={() => setAmount((maxCents / 100).toFixed(2))}>All {money(maxCents, data.household.currency)}</button><button type="button" className={chip === "half" ? "on" : ""} onClick={() => setAmount((halfCents / 100).toFixed(2))}>Half</button><button type="button" className={chip === "custom" ? "on" : ""} onClick={() => setAmount("")}>Custom</button></div>
+    {consequence && <p className={`pm-conseq ${consequence.tone}`}>{consequence.text}</p>}
+    <input className="pm-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Note (optional) — e.g. Venmo 7/15" />
+    {error && <p className="form-error">{error}</p>}
+    <button className="pm-cta" disabled={busy || !amountCents || overMax}>{busy ? "Confirming…" : "Confirm received"}</button>
+    <button type="button" className="pm-cancel" onClick={close}>Cancel</button>
+  </form> : <p>You have no received payments to confirm.</p>}</Modal>; }
 
 function InviteModal({ householdName, householdId, mutate, close }: { householdName: string; householdId: string; mutate: (path: string, method: string, body?: unknown) => Promise<Record<string, unknown>>; close: () => void }) {
   const [invites, setInvites] = useState<InviteItem[]>([]);
