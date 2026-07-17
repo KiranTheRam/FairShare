@@ -3,6 +3,7 @@
 import { ArrowLeft, Check, LogOut } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { PasswordInput } from "@/app/password-input";
 import { isThemeId, THEMES, type ThemeId } from "@/lib/themes";
 
 type SessionData = { user: { id: string; email: string; displayName: string }; csrfToken: string };
@@ -177,8 +178,8 @@ export function SettingsClient() {
         <h2>Change password</h2>
         <p>Changing your password signs out every device, including this one.</p>
         <form className="settings-password-form" onSubmit={changePassword}>
-          <label>Current password<input type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required /></label>
-          <label>New password<input type="password" autoComplete="new-password" placeholder="12+ characters with upper, lower, and a number" minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required /></label>
+          <label>Current password<PasswordInput autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required /></label>
+          <label>New password<PasswordInput autoComplete="new-password" placeholder="12+ characters with upper, lower, and a number" minLength={12} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required /></label>
           <button className="secondary-button" disabled={passwordBusy}>{passwordBusy ? "Changing…" : "Change password"}</button>
         </form>
       </section>
