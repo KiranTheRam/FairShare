@@ -1082,17 +1082,18 @@ a { color: inherit; text-decoration: none; }
 .auth-shell, .loading-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 50% 0, var(--auth-glow) 0, var(--canvas) 45%); }
 .auth-card { width: min(440px, 100%); padding: 38px; border: 1px solid var(--line); border-radius: 22px; background: var(--paper); box-shadow: var(--shadow); }
 .auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 32px; font-size: 19px; font-weight: 800; }
-.auth-card h1 { margin: 5px 0 8px; font-size: 28px; letter-spacing: -1px; }
+.auth-card h1 { margin: 5px 0 8px; font-size: 28px; letter-spacing: -1px; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
 .auth-card > p:not(.eyebrow), .empty-copy, .panel-empty { color: var(--muted); font-size: 11px; line-height: 1.55; }
 .auth-card form { display: grid; gap: 14px; margin-top: 24px; }
 .auth-card label { display: grid; gap: 7px; color: var(--muted); font-size: 10px; font-weight: 700; }
-.auth-card input { height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--canvas); color: var(--ink); outline: none; }
+.auth-card input { height: 44px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--wash); color: var(--ink); outline: none; }
 .auth-card input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 18%, transparent); }
 .password-field { position: relative; display: block; min-width: 0; }
 .password-field input { width: 100%; padding-right: 38px; }
 .password-toggle { position: absolute; top: 0; bottom: 0; right: 3px; display: grid; place-items: center; width: 32px; margin: 0; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
 .password-toggle:hover { color: var(--ink-soft); }
-.auth-switch { width: 100%; margin-top: 18px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 9px; }
+.auth-switch { width: 100%; margin-top: 18px; padding: 0; border: 0; background: transparent; color: var(--teal); font-size: 10.5px; font-weight: 750; cursor: pointer; }
+.auth-note { margin: 18px 0 0; color: var(--muted); font-size: 9px; text-align: center; }
 .form-error { margin: 12px 0 0; padding: 10px 12px; border: 1px solid #7b3e35; border-radius: 9px; background: var(--coral-soft); color: var(--coral); font-size: 10px; }
 .error-banner { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding: 12px 14px; border: 1px solid #7b3e35; border-radius: 10px; background: var(--coral-soft); color: var(--coral); font-size: 11px; }
 .error-banner button { border: 0; background: transparent; color: inherit; font-weight: 750; cursor: pointer; }

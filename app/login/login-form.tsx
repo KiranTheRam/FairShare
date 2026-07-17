@@ -23,7 +23,7 @@ export function LoginForm({ initialSetup }: { initialSetup: boolean }) {
         body: JSON.stringify(setup ? { email, displayName, password, setupToken } : { email, password }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Authentication failed");
+      if (!response.ok) throw new Error(response.status === 429 ? "Too many attempts — wait 15 minutes and try again." : data.error ?? "Authentication failed");
       location.href = data.user.role === "administrator" ? "/admin" : "/";
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Authentication failed");
@@ -44,6 +44,8 @@ export function LoginForm({ initialSetup }: { initialSetup: boolean }) {
       {error && <p className="form-error" role="alert">{error}</p>}
       <button className="primary-button" disabled={busy}>{busy ? "Please wait…" : setup ? "Create administrator" : "Sign in"}</button>
     </form>
-    {!initialSetup && <button className="auth-switch" type="button" onClick={() => setSetup(false)}>Administrator setup is disabled after the first account is created.</button>}
+    {!initialSetup && (setup
+      ? <button className="auth-switch" type="button" onClick={() => setSetup(false)}>‹ Back to sign in</button>
+      : <p className="auth-note">Administrator setup is disabled after the first account is created.</p>)}
   </section></main>;
 }
