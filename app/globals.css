@@ -390,6 +390,29 @@ a { color: inherit; text-decoration: none; }
 .settle-direct { padding: 8px 18px 0; }
 .settle-drow { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 9px 0; opacity: .72; }
 @media (max-width: 640px) { .settle-nets { gap: 8px; } .settle-net { min-width: 96px; } .settle-prow { grid-template-columns: auto 1fr auto; } .settle-prow .settle-confirm, .settle-prow .settle-wait { grid-column: 2 / -1; justify-self: start; } }
+
+/* Activity: day-grouped story */
+.activity-toolbar { display: flex; align-items: center; gap: 12px; padding: 2px 4px 18px; }
+.activity-toolbar p { margin: 0; color: var(--muted); font-size: 11.5px; flex: 1; }
+.activity-export { display: inline-flex; align-items: center; gap: 6px; color: var(--teal); font-weight: 750; font-size: 11.5px; }
+.activity-day { margin-bottom: 20px; }
+.activity-day-head { display: flex; align-items: baseline; gap: 10px; padding-bottom: 3px; }
+.activity-day-head strong { font-size: 14.5px; letter-spacing: -.3px; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.activity-day-head small { color: var(--muted); font-size: 10.5px; }
+.activity-day-sum { margin-left: auto; font-size: 10.5px; color: var(--teal); font-weight: 700; font-variant-numeric: tabular-nums; }
+.activity-row { width: 100%; display: grid; grid-template-columns: 30px 1fr auto; gap: 13px; align-items: center; padding: 11px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.activity-row:disabled { cursor: default; }
+.activity-glyph { align-self: center; }
+.activity-glyph.glyph-pay { color: var(--teal); }
+.activity-glyph.glyph-close { color: var(--muted); }
+.activity-text strong { display: block; font-size: 12.5px; letter-spacing: -.2px; color: var(--ink); }
+.activity-text small { color: var(--muted); font-size: 10.5px; }
+.activity-right { text-align: right; display: grid; }
+.activity-right b { font-size: 13.5px; font-weight: 700; letter-spacing: -.3px; font-variant-numeric: tabular-nums; font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; }
+.activity-right small { color: var(--muted); font-size: 9px; }
+.activity-right .amt-in { color: var(--teal); }
+.activity-right .amt-bill { color: var(--ink); }
+.activity-right .amt-close { color: var(--muted); font-weight: 600; }
 .bill-line { width: 100%; display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .bill-line-text strong { display: block; font-size: 12.5px; letter-spacing: -.2px; color: var(--ink); }
 .bill-line-text small { color: var(--muted); font-size: 10px; }
