@@ -287,6 +287,57 @@ a { color: inherit; text-decoration: none; }
 .category-icon.category-household { background: color-mix(in srgb, #8a6a3c 12%, var(--paper)); color: #7c5f35; }
 .category-icon.category-other { background: color-mix(in srgb, #65717c 12%, var(--paper)); color: #65717c; }
 .category-icon.mint { border-color: color-mix(in srgb, var(--teal) 18%, transparent); }
+
+/* Glance overview: hero, per-person balance cards, next-due */
+.glance-grid { display: grid; grid-template-columns: minmax(300px, .9fr) minmax(360px, 1.1fr); gap: 16px; align-items: start; }
+.glance-col { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.glance-num, .glance-big, .glance-amt, .glance-due-amt { font-family: ui-rounded, "SF Pro Rounded", "Avenir Next", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.glance-hero { position: relative; overflow: hidden; display: grid; gap: 4px; border-radius: 24px; padding: 24px 24px 22px; background: var(--hero); color: #fff; border: 0; }
+.glance-hero::before { content: ""; position: absolute; right: -70px; top: -80px; width: 220px; height: 220px; border-radius: 50%; background: rgba(255,255,255,.06); }
+.glance-hero::after { content: ""; position: absolute; right: -20px; top: 60px; width: 130px; height: 130px; border-radius: 50%; background: rgba(255,255,255,.05); }
+.glance-k { color: var(--hero-muted); font-size: 12px; font-weight: 650; }
+.glance-big { font-size: 44px; font-weight: 700; letter-spacing: -1.8px; line-height: 1.05; }
+.glance-sub { color: var(--hero-soft); font-size: 11.5px; }
+.glance-delta { margin-top: 10px; display: inline-flex; width: fit-content; align-items: center; gap: 6px; background: rgba(255,255,255,.13); border-radius: 99px; padding: 5px 11px; font-size: 10.5px; font-weight: 700; color: var(--hero-positive); }
+.glance-card { display: grid; gap: 11px; background: var(--paper); border: 1px solid var(--line); border-radius: 20px; padding: 15px 17px 14px; }
+.glance-card-top { display: flex; align-items: center; gap: 12px; }
+.glance-card-top .avatar { width: 38px; height: 38px; font-size: 12px; }
+.glance-who { display: grid; gap: 1px; min-width: 0; }
+.glance-who strong { font-size: 13.5px; letter-spacing: -.2px; }
+.glance-who small { color: var(--muted); font-size: 10.5px; }
+.glance-amt { margin-left: auto; font-size: 21px; font-weight: 700; letter-spacing: -.6px; }
+.glance-breakdown { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; }
+.glance-seg { min-width: 5px; }
+.glance-keys { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.glance-keys button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; padding: 2px 4px; border-radius: 7px; color: var(--ink-soft); font-size: 10.5px; cursor: pointer; }
+.glance-keys button:hover { background: var(--wash); }
+.glance-keys button b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.glance-keys i { width: 8px; height: 8px; border-radius: 2.5px; flex: none; }
+.glance-actions { display: flex; gap: 8px; }
+.glance-confirm { border: 0; border-radius: 99px; padding: 8px 16px; background: var(--teal); color: var(--canvas); font-weight: 750; font-size: 11.5px; cursor: pointer; }
+.glance-remind { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 99px; padding: 8px 14px; background: transparent; color: var(--teal); font-weight: 750; font-size: 11.5px; cursor: pointer; }
+.glance-other { opacity: .8; }
+.glance-settled { place-items: center; text-align: center; padding: 30px 20px; color: var(--teal); gap: 6px; }
+.glance-settled small { color: var(--muted); }
+.glance-due { display: flex; align-items: center; gap: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 20px; padding: 13px 17px; }
+.glance-cal { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: var(--wash); border: 1px solid var(--line); line-height: 1.05; }
+.glance-cal b { font-size: 15px; }
+.glance-cal small { font-size: 7.5px; color: var(--muted); font-weight: 800; }
+.glance-due-what { display: grid; gap: 1px; }
+.glance-due-what strong { font-size: 12.5px; }
+.glance-due-what small { color: var(--muted); font-size: 10.5px; }
+.glance-due-amt { margin-left: auto; font-size: 14px; font-weight: 700; }
+.glance-add { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px dashed var(--line); border-radius: 20px; padding: 13px; background: transparent; color: var(--teal); font-weight: 750; font-size: 12px; cursor: pointer; }
+.glance-add:hover { background: var(--wash); }
+.glance-seg.category-housing, .glance-keys i.category-housing { background: #5968c9; }
+.glance-seg.category-utilities, .glance-keys i.category-utilities { background: #9b6d00; }
+.glance-seg.category-groceries, .glance-keys i.category-groceries { background: #147582; }
+.glance-seg.category-dining, .glance-keys i.category-dining { background: #a95c1a; }
+.glance-seg.category-transport, .glance-keys i.category-transport { background: #3473c8; }
+.glance-seg.category-subscriptions, .glance-keys i.category-subscriptions { background: #8149a6; }
+.glance-seg.category-household, .glance-keys i.category-household { background: #7c5f35; }
+.glance-seg.category-other, .glance-keys i.category-other { background: #65717c; }
+@media (max-width: 760px) { .glance-grid { grid-template-columns: 1fr; } .glance-big { font-size: 40px; } }
 .action-chip { padding: 6px 9px; border-radius: 8px; background: var(--yellow-soft); color: #86600d; font-size: 9.5px; font-weight: 750; }
 .recent-card { grid-column: 1 / -1; }
 .bill-list { display: grid; }
