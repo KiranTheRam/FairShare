@@ -1,11 +1,11 @@
 "use client";
 
-import { ArrowDownLeft, ArrowRight, Bell, BellRing, CalendarClock, CarFront, Check, Copy, CreditCard, Download, FileText, House, LayoutDashboard, Lightbulb, Menu, MessageSquare, PackageOpen, Paperclip, Plus, ReceiptText, Repeat2, Settings, Shapes, ShoppingBasket, Trash2, UserPlus, UtensilsCrossed, WalletCards, X } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, Bell, BellRing, CarFront, Check, Copy, CreditCard, Download, FileText, House, LayoutDashboard, Lightbulb, Menu, MessageSquare, PackageOpen, Paperclip, Plus, ReceiptText, Repeat2, Settings, Shapes, ShoppingBasket, Trash2, UserPlus, UtensilsCrossed, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { BILL_CATEGORIES, CATEGORY_LABELS, type BillCategory } from "@/lib/categories";
 import { isThemeId } from "@/lib/themes";
 
-type Tab = "overview" | "bills" | "upcoming" | "balances" | "activity";
+type Tab = "overview" | "bills" | "balances" | "activity";
 type ModalName = "bill" | "edit" | "payment" | "recurring-edit" | "detail" | "invite" | null;
 type User = { id: string; email: string; displayName: string; role: "member" | "administrator" };
 type HouseholdListItem = { id: string; name: string; currency: string };
@@ -172,18 +172,18 @@ export function HouseholdApp() {
       <label className="household-switcher"><span className="house-avatar">{initials(data?.household.name ?? "House")}</span><span><small>Household</small><strong>{data?.household.name ?? "Loading…"}</strong></span>
         <select aria-label="Choose household" value={householdId} onChange={(e) => setHouseholdId(e.target.value)}>{session?.households.map((household) => <option key={household.id} value={household.id}>{household.name}</option>)}</select>
       </label>
-      <nav className="side-nav">{(["overview", "bills", "upcoming", "balances", "activity"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => { setTab(item); setSidebarOpen(false); }}>{item === "overview" ? <LayoutDashboard size={19} /> : item === "bills" ? <ReceiptText size={19} /> : item === "upcoming" ? <CalendarClock size={19} /> : item === "balances" ? <WalletCards size={19} /> : <FileText size={19} />}<span>{item[0].toUpperCase() + item.slice(1)}</span></button>)}</nav>
+      <nav className="side-nav">{(["overview", "bills", "balances", "activity"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => { setTab(item); setSidebarOpen(false); }}>{item === "overview" ? <LayoutDashboard size={19} /> : item === "bills" ? <ReceiptText size={19} /> : item === "balances" ? <WalletCards size={19} /> : <FileText size={19} />}<span>{item[0].toUpperCase() + item.slice(1)}</span></button>)}</nav>
       <div className="side-bottom"><a className="side-link" href="/settings"><Settings size={19} /> User settings</a><a className="profile-card" href="/settings"><Avatar name={session?.user.displayName ?? ""} /><span><strong>{session?.user.displayName}</strong><small>{session?.user.email}</small></span></a></div>
     </aside>
     {sidebarOpen && <button className="scrim" aria-label="Close menu" onClick={() => setSidebarOpen(false)} />}
     <main className="main"><header className="topbar"><button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open menu"><Menu size={22} /></button><div className="top-actions"><button className="install-pill" onClick={install}><ArrowDownLeft size={16} /> Install app</button><button className="icon-button notification-button" onClick={openNotifications} aria-label="Notifications"><Bell size={20} />{notifications.some((item) => !item.readAt) && <span className="unread-dot" />}</button><a className="icon-button" href="/settings" aria-label="User settings"><Settings size={20} /></a><Avatar name={session?.user.displayName ?? ""} /></div>
       {notificationsOpen && <div className="notification-panel"><div className="panel-title"><strong>Notifications</strong><span>{notifications.filter((item) => !item.readAt).length} new</span></div>{notifications.length ? notifications.slice(0, 8).map((item) => <button key={item.id}><span className="activity-icon mint"><Bell size={17} /></span><span><strong>{item.title}</strong><small>{item.body}</small></span></button>) : <p className="panel-empty">You’re all caught up.</p>}</div>}
     </header>
-    <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1>{tab === "overview" && <button className="activity-link-button" onClick={() => setTab("activity")}><FileText size={16} /> Activity</button>}</div><p>{tab === "overview" ? "Here’s where everyone stands today." : tab === "bills" ? "Outstanding expenses and completed settlement history." : tab === "upcoming" ? "Scheduled household expenses and their next occurrence." : tab === "balances" ? "Open person-to-person obligations after repayments." : "Recent bills, settlements, closures, and payments."}</p></div>{tab !== "overview" && <div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div>}</div>
+    <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1>{tab === "overview" && <button className="activity-link-button" onClick={() => setTab("activity")}><FileText size={16} /> Activity</button>}</div><p>{tab === "overview" ? "Here’s where everyone stands today." : tab === "bills" ? "Outstanding, settled, and scheduled household expenses." : tab === "balances" ? "Open person-to-person obligations after repayments." : "Recent bills, settlements, closures, and payments."}</p></div>{tab !== "overview" && <div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div>}</div>
       {error && <div className="error-banner">{error}<button onClick={() => void refresh()}>Try again</button></div>}
-      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onBill={() => setModal("bill")} onPayment={() => openPayment()} onNudge={sendNudge} onBillDetail={openBill} onOpenBills={() => setTab("bills")} /> : tab === "bills" ? <Bills data={data!} onBillDetail={openBill} /> : tab === "upcoming" ? <Upcoming data={data!} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <Balances data={data!} user={session!.user} onPayment={() => openPayment()} onNudge={sendNudge} onInvite={() => setModal("invite")} /> : <Activity data={data!} householdId={householdId} onBillDetail={openBill} />}
+      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onBill={() => setModal("bill")} onPayment={() => openPayment()} onNudge={sendNudge} onBillDetail={openBill} onOpenBills={() => setTab("bills")} /> : tab === "bills" ? <Bills data={data!} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <Balances data={data!} user={session!.user} onPayment={() => openPayment()} onNudge={sendNudge} onInvite={() => setModal("invite")} /> : <Activity data={data!} householdId={householdId} onBillDetail={openBill} />}
     </div></main>
-    <nav className="bottom-nav">{(["overview", "bills"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}<button className="fab" onClick={() => setModal("bill")}><Plus size={24} /></button>{(["upcoming", "balances"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}</nav>
+    <nav className="bottom-nav">{(["overview", "bills"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}<button className="fab" onClick={() => setModal("bill")}><Plus size={24} /></button>{(["balances", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}</nav>
     {modal === "bill" && data && <BillModal data={data} currentUserId={session?.user.id} close={() => setModal(null)} save={async (body, recurring) => { await mutate(`/api/households/${householdId}/bills`, "POST", { ...(body as object), ...(recurring ? { recurring } : {}) }); setModal(null); setToast(recurring ? "Bill and recurring schedule added." : "Bill added to the household ledger."); await refresh(); }} />}
     {modal === "edit" && data && billDetail && <BillModal data={data} currentUserId={session?.user.id} initial={billDetail} close={() => setModal("detail")} save={async (body) => { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "PATCH", body); setModal(null); setToast("Bill updated and balances recalculated."); await refresh(); }} />}
     {modal === "payment" && data && <PaymentModal data={data} currentUserId={session?.user.id ?? ""} specific={paymentContext} close={() => { setModal(null); setPaymentContext(null); }} save={async (body) => { await mutate(`/api/households/${householdId}/payments`, "POST", body); setModal(null); setPaymentContext(null); setToast("Payment confirmed."); await refresh(); }} />}
@@ -210,7 +210,7 @@ function CategoryIcon({ category, settled }: { category: BillCategory; settled: 
   const Icon = CATEGORY_ICONS[category] ?? CATEGORY_ICONS.other;
   return <span className={`activity-icon category-icon ${settled ? "mint" : `category-${category}`}`} title={CATEGORY_LABELS[category] ?? CATEGORY_LABELS.other}><Icon size={18} aria-hidden="true" /></span>;
 }
-function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "overview" ? LayoutDashboard : item === "bills" ? ReceiptText : item === "upcoming" ? CalendarClock : item === "balances" ? WalletCards : FileText; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{item === "overview" ? "Home" : item[0].toUpperCase() + item.slice(1)}</small></button>; }
+function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "overview" ? LayoutDashboard : item === "bills" ? ReceiptText : item === "balances" ? WalletCards : FileText; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{item === "overview" ? "Home" : item[0].toUpperCase() + item.slice(1)}</small></button>; }
 
 function BalanceCard({ item, currency, mine, direction, onOpen, onConfirm, onNudge, onBillDetail }: { item: Balance; currency: string; mine: boolean; direction: "in" | "out" | "other"; onOpen: () => void; onConfirm: () => void; onNudge: (item: Balance) => void; onBillDetail: (id: string) => void }) {
   const components = item.components ?? [];
@@ -242,7 +242,7 @@ function Overview({ data, user, net, onBill, onPayment, onNudge, onBillDetail, o
         <span className="glance-sub">{debtorNames.length ? `from ${debtorNames.join(" and ")} · ` : ""}{openBillCount} open bill{openBillCount === 1 ? "" : "s"}</span>
         {receiptTotal > 0 && <span className="glance-delta">▼ {money(receiptTotal, currency)} less than yesterday{latestReceipt ? ` — ${latestReceipt.payerName} settled ${latestReceipt.billName ?? "a payment"}` : ""}</span>}
       </section>
-      {nextRecurring && nextDue && <section className="glance-due"><span className="glance-when">{nextDue.toLocaleDateString(undefined, { month: "short" }).toUpperCase()} {nextDue.getDate()}</span><span className="glance-due-what"><strong>{nextRecurring.name}</strong><small>recurring · splits {nextRecurring.templateConfig.allocations.length} way{nextRecurring.templateConfig.allocations.length === 1 ? "" : "s"}</small></span><strong className="glance-due-amt">{nextRecurring.expectedAmountCents === null ? "varies" : money(nextRecurring.expectedAmountCents, currency)}</strong></section>}
+      {nextRecurring && nextDue && <section className="glance-due glance-tappable" role="button" tabIndex={0} onClick={onOpenBills} onKeyDown={(event) => { if (event.key === "Enter") onOpenBills(); }}><span className="glance-when">{nextDue.toLocaleDateString(undefined, { month: "short" }).toUpperCase()} {nextDue.getDate()}</span><span className="glance-due-what"><strong>{nextRecurring.name}</strong><small>recurring · splits {nextRecurring.templateConfig.allocations.length} way{nextRecurring.templateConfig.allocations.length === 1 ? "" : "s"}</small></span><strong className="glance-due-amt">{nextRecurring.expectedAmountCents === null ? "varies" : money(nextRecurring.expectedAmountCents, currency)}</strong></section>}
       <button className="glance-add" onClick={onBill}><Plus size={17} /> Add a bill</button>
     </div>
     <div className="glance-col">
@@ -266,7 +266,7 @@ function BillLine({ bill, currency, onClick }: { bill: Bill; currency: string; o
   </button>;
 }
 
-function Bills({ data, onBillDetail }: { data: HouseholdData; onBillDetail: (id: string) => void }) {
+function Bills({ data, onBillDetail, onEditRecurring }: { data: HouseholdData; onBillDetail: (id: string) => void; onEditRecurring: (item: Recurring) => void }) {
   const currency = data.household.currency;
   const open = data.bills.filter((bill) => bill.status === "open");
   const settled = data.bills.filter((bill) => bill.status === "settled");
@@ -280,6 +280,8 @@ function Bills({ data, onBillDetail }: { data: HouseholdData; onBillDetail: (id:
     return [...totals].sort((a, b) => b[1] - a[1]);
   }, [data.bills]);
   const spendTotal = categoryTotals.reduce((sum, [, amount]) => sum + amount, 0);
+  const schedules = [...data.recurring].sort((a, b) => +new Date(a.nextOccurrence) - +new Date(b.nextOccurrence));
+  const monthlyEquivalent = Math.round(schedules.reduce((sum, item) => { if (!item.active || item.expectedAmountCents === null) return sum; const factor = item.cadence === "weekly" ? 52 / 12 : item.cadence === "monthly" ? 1 : item.cadence === "quarterly" ? 1 / 3 : 1 / 12; return sum + item.expectedAmountCents * factor; }, 0));
   return <section className="page-content bills-view">
     <div className="bills-stats">
       <div><small>RECORDED</small><b>{money(recorded, currency)}</b></div>
@@ -297,9 +299,17 @@ function Bills({ data, onBillDetail }: { data: HouseholdData; onBillDetail: (id:
       {settled.map((bill) => <BillLine key={bill.id} bill={bill} currency={currency} onClick={() => onBillDetail(bill.id)} />)}
       {!settled.length && <p className="empty-copy">No settled expenses yet.</p>}
     </div>
+    <div className="bills-band quiet">
+      <div className="bills-band-head"><strong>Scheduled</strong><small>{schedules.length} recurring · tap to edit</small>{monthlyEquivalent > 0 && <span className="bills-sum sched">≈ {money(monthlyEquivalent, currency)} / mo</span>}</div>
+      {schedules.map((item) => { const date = new Date(item.nextOccurrence); return <button className="bill-line sched" key={item.id} onClick={() => onEditRecurring(item)}>
+        <span className="bill-when">{date.toLocaleDateString(undefined, { month: "short" }).toUpperCase()} {date.getDate()}</span>
+        <span className="bill-line-text"><strong>{item.name}</strong><small>{item.cadence} · splits {item.templateConfig.allocations.length} way{item.templateConfig.allocations.length === 1 ? "" : "s"}</small></span>
+        <span className="bill-line-amt"><b>{item.expectedAmountCents === null ? "varies" : money(item.expectedAmountCents, currency)}</b><small>{item.active ? "RENEWS" : "PAUSED"}</small></span>
+      </button>; })}
+      {!schedules.length && <p className="empty-copy">No scheduled bills yet. Enable recurrence while adding an expense.</p>}
+    </div>
   </section>;
 }
-function Upcoming({ data, onEditRecurring }: { data: HouseholdData; onEditRecurring: (item: Recurring) => void }) { const schedules = [...data.recurring].sort((a, b) => +new Date(a.nextOccurrence) - +new Date(b.nextOccurrence)); const activeCount = schedules.filter((item) => item.active).length; return <section className="page-content upcoming-view"><div className="page-toolbar"><p>{activeCount} active schedule{activeCount === 1 ? "" : "s"} · Select one to edit its future details.</p><span className="count-badge">{activeCount}</span></div><div className="upcoming-list flat-list">{schedules.map((item) => { const date = new Date(item.nextOccurrence); return <button className="calendar-item scheduled-item" key={item.id} onClick={() => onEditRecurring(item)}><span className="date-tile"><b>{date.getDate()}</b><small>{date.toLocaleDateString(undefined, { month: "short" }).toUpperCase()}</small></span><span><strong>{item.name}</strong><small>{item.cadence} · {item.expectedAmountCents === null ? "variable amount" : money(item.expectedAmountCents, data.household.currency)}</small></span><span className={`status-pill ${item.active ? "done" : "open"}`}>{item.active ? "Scheduled" : "Paused"}</span></button>; })}{!schedules.length && <p className="empty-copy">No scheduled bills yet. Enable recurrence while adding an expense.</p>}</div></section>; }
 function Balances({ data, user, onPayment, onNudge, onInvite }: { data: HouseholdData; user: User; onPayment: () => void; onNudge: (balance: Balance) => Promise<void>; onInvite: () => void }) {
   const [view, setView] = useState<"direct" | "simplified">("direct");
   const showSimplified = view === "simplified" && data.simplifiedBalances.length > 0;
