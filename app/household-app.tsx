@@ -256,15 +256,13 @@ function Overview({ data, user, net, onPayment, onNudge, onClaim, onEditClaim, o
   const latestReceipt = recentReceipts[0];
   const claimsForMe = data.claims.filter((claim) => claim.creditorUserId === user.id);
   const claimFor = (recipientUserId: string) => data.claims.find((claim) => claim.debtorUserId === user.id && claim.creditorUserId === recipientUserId);
-  const nextRecurring = data.recurring.filter((item) => item.active).sort((a, b) => +new Date(a.nextOccurrence) - +new Date(b.nextOccurrence))[0];
-  const nextDue = nextRecurring ? new Date(nextRecurring.nextOccurrence) : null;
   return <div className="glance-grid">
     <div className="glance-col">
       <section className="glance-hero"><span className="glance-k">{net < 0 ? "You owe" : "You are owed"}</span><strong className="glance-big">{money(Math.abs(net), currency)}</strong>
         <span className="glance-sub">{debtorNames.length ? `from ${debtorNames.join(" and ")} · ` : ""}{openBillCount} open bill{openBillCount === 1 ? "" : "s"}</span>
         {receiptTotal > 0 && <span className="glance-delta">▼ {money(receiptTotal, currency)} less than yesterday{latestReceipt ? ` — ${latestReceipt.payerName} settled ${latestReceipt.billName ?? "a payment"}` : ""}</span>}
       </section>
-      {nextRecurring && nextDue && <section className="glance-due glance-tappable" role="button" tabIndex={0} onClick={onOpenBills} onKeyDown={(event) => { if (event.key === "Enter") onOpenBills(); }}><span className="glance-when">{nextDue.toLocaleDateString(undefined, { month: "short" }).toUpperCase()} {nextDue.getDate()}</span><span className="glance-due-what"><strong>{nextRecurring.name}</strong><small>recurring · splits {nextRecurring.templateConfig.allocations.length} way{nextRecurring.templateConfig.allocations.length === 1 ? "" : "s"}</small></span><strong className="glance-due-amt">{nextRecurring.expectedAmountCents === null ? "varies" : money(nextRecurring.expectedAmountCents, currency)}</strong></section>}
+      
     </div>
     <div className="glance-col">
       {claimsForMe.map((claim) => <section className="glance-claim" key={claim.id}>
