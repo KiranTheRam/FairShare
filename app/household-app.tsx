@@ -1,13 +1,13 @@
 "use client";
 
-import { ArrowDownLeft, ArrowRight, Bell, Check, Copy, Download, FileText, LayoutDashboard, Menu, Paperclip, Plus, ReceiptText, Settings, Trash2, UserPlus, WalletCards, X } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, Bell, Check, Clock, Copy, Download, FileText, House, Menu, Paperclip, Plus, Settings, Trash2, UserPlus, Users, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Basket, Car, FileX, ForkKnife, HandCoins, House as HouseDuotone, Lightbulb as LightbulbDuotone, Package as PackageDuotone, Repeat as RepeatDuotone, SealCheck, Shapes as ShapesDuotone, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { BILL_CATEGORIES, CATEGORY_LABELS, type BillCategory } from "@/lib/categories";
 import { isThemeId } from "@/lib/themes";
 
-type Tab = "overview" | "bills" | "activity";
-const TAB_LABELS: Record<Tab, string> = { overview: "Home", bills: "Bills", activity: "Activity" };
+type Tab = "friends" | "groups" | "activity";
+const TAB_LABELS: Record<Tab, string> = { friends: "Friends", groups: "Groups", activity: "Activity" };
 type ModalName = "bill" | "edit" | "payment" | "recurring-edit" | "detail" | "invite" | "claim" | null;
 type User = { id: string; email: string; displayName: string; role: "member" | "administrator" };
 type HouseholdListItem = { id: string; name: string; currency: string };
@@ -33,8 +33,10 @@ const initials = (name: string) => name.split(/\s+/).map((part) => part[0]).join
 export function HouseholdApp() {
   const [session, setSession] = useState<SessionData | null>(null);
   const [householdId, setHouseholdId] = useState("");
-  const [data, setData] = useState<HouseholdData | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [snapshots, setSnapshots] = useState<Record<string, HouseholdData>>({});
+  const [tab, setTab] = useState<Tab>("friends");
+  const [friendId, setFriendId] = useState<string | null>(null);
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalName>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -48,6 +50,12 @@ export function HouseholdApp() {
   const [paymentContext, setPaymentContext] = useState<(Balance & { billId?: string | null; billName?: string; note?: string }) | null>(null);
   const [selectedRecurring, setSelectedRecurring] = useState<Recurring | null>(null);
   const [claimContext, setClaimContext] = useState<{ balance: Balance; existing?: Claim; initialCents?: number } | null>(null);
+  const data = householdId ? snapshots[householdId] ?? null : null;
+  const allData = useMemo(() => (session?.households ?? []).map((item) => snapshots[item.id]).filter(Boolean) as HouseholdData[], [session, snapshots]);
+  // Which household a bill belongs to, so taps work from cross-household feeds.
+  const billHomes = useMemo(() => { const map = new Map<string, string>(); for (const snapshot of allData) for (const bill of snapshot.bills) map.set(bill.id, snapshot.household.id); return map; }, [allData]);
+  function navTo(next: Tab) { setFriendId(null); setGroupId(null); setTab(next); }
+  const mergedActivity = useMemo(() => { if (!allData.length) return null; return { ...allData[0], bills: allData.flatMap((snapshot) => snapshot.bills), payments: allData.flatMap((snapshot) => snapshot.payments), closures: allData.flatMap((snapshot) => snapshot.closures) }; }, [allData]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = "dark";
@@ -74,9 +82,9 @@ export function HouseholdApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [householdId]);
 
-  // refresh is intentionally keyed only by the selected Household.
+  // refresh loads every household in the account; keyed by session arrival.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (householdId) void refresh(); }, [householdId]);
+  useEffect(() => { if (session?.households.length && householdId) void refresh(); }, [session, householdId === ""]);
   // Other members' changes (payments, bills) never reach an already-open tab on
   // their own, so refetch silently when this tab regains focus and poll gently
   // while it stays visible.
@@ -92,14 +100,18 @@ export function HouseholdApp() {
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => { setToast(""); setAddAnother(false); }, 4000); return () => clearTimeout(timer); }, [toast]);
 
   async function refresh(options?: { silent?: boolean }) {
+    if (!session) return;
     const silent = options?.silent ?? false;
     if (!silent) { setLoading(true); setError(""); }
     try {
-      const [response, recurringResponse] = await Promise.all([fetch(`/api/households/${householdId}`, { cache: "no-store" }), fetch(`/api/households/${householdId}/recurring`, { cache: "no-store" })]);
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "Unable to load household");
-      const recurringBody = recurringResponse.ok ? await recurringResponse.json() : { recurring: [] };
-      setData({ ...body, recurring: recurringBody.recurring }); localStorage.setItem("fairshare-household", householdId);
+      const entries = await Promise.all(session.households.map(async (item) => {
+        const [response, recurringResponse] = await Promise.all([fetch(`/api/households/${item.id}`, { cache: "no-store" }), fetch(`/api/households/${item.id}/recurring`, { cache: "no-store" })]);
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error ?? "Unable to load household");
+        const recurringBody = recurringResponse.ok ? await recurringResponse.json() : { recurring: [] };
+        return [item.id, { ...body, recurring: recurringBody.recurring }] as const;
+      }));
+      setSnapshots(Object.fromEntries(entries)); localStorage.setItem("fairshare-household", householdId);
       fetch("/api/notifications", { cache: "no-store" }).then(async (list) => { if (list.ok) setNotifications((await list.json()).notifications as NotificationItem[]); }).catch(() => {});
     } catch (cause) { if (!silent) setError(cause instanceof Error ? cause.message : "Unable to load household"); }
     finally { if (!silent) setLoading(false); }
@@ -127,7 +139,9 @@ export function HouseholdApp() {
   }
 
   async function openBill(billId: string) {
-    const response = await fetch(`/api/households/${householdId}/bills/${billId}`, { cache: "no-store" });
+    const home = billHomes.get(billId) ?? householdId;
+    if (home !== householdId) setHouseholdId(home);
+    const response = await fetch(`/api/households/${home}/bills/${billId}`, { cache: "no-store" });
     const body = await response.json();
     if (!response.ok) { setToast(body.error ?? "Bill detail could not be loaded"); return; }
     setBillDetail(body); setModal("detail");
@@ -185,10 +199,8 @@ export function HouseholdApp() {
     else setToast("Use your browser menu to install FairShare on this device.");
   }
 
-  const myBalances = useMemo(() => data?.balances.filter((item) => item.payerUserId === session?.user.id || item.recipientUserId === session?.user.id) ?? [], [data, session]);
   const receivableBalances = useMemo(() => data?.balances.filter((item) => item.recipientUserId === session?.user.id) ?? [], [data, session]);
-  const net = myBalances.reduce((sum, item) => sum + (item.recipientUserId === session?.user.id ? item.amountCents : -item.amountCents), 0);
-  const title = tab === "overview" ? `Hello, ${session?.user.displayName.split(" ")[0] ?? "there"}` : TAB_LABELS[tab];
+  const title = TAB_LABELS[tab];
 
   if (loading && !session) return <main className="loading-screen"><span className="brand-mark"><span className="roof" /><span className="door" /></span><p>Loading FairShare…</p></main>;
   if (session && !session.households.length) return <EmptyAccount user={session.user} onLogout={logout} />;
@@ -200,18 +212,25 @@ export function HouseholdApp() {
         <select aria-label="Choose household" value={householdId} onChange={(e) => setHouseholdId(e.target.value)}>{session?.households.map((household) => <option key={household.id} value={household.id}>{household.name}</option>)}</select>
       </label>
       <button className="side-invite" onClick={() => { setModal("invite"); setSidebarOpen(false); }}><UserPlus size={15} /> Invite a roommate</button>
-      <nav className="side-nav">{(["overview", "bills", "activity"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => { setTab(item); setSidebarOpen(false); }}>{item === "overview" ? <LayoutDashboard size={19} /> : item === "bills" ? <ReceiptText size={19} /> : <FileText size={19} />}<span>{TAB_LABELS[item]}</span></button>)}</nav>
+      <nav className="side-nav">{(["friends", "groups", "activity"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => { navTo(item); setSidebarOpen(false); }}>{item === "friends" ? <Users size={19} /> : item === "groups" ? <House size={19} /> : <Clock size={19} />}<span>{TAB_LABELS[item]}</span></button>)}</nav>
       <div className="side-bottom"><a className="side-link" href="/settings"><Settings size={19} /> User settings</a><a className="profile-card" href="/settings"><Avatar name={session?.user.displayName ?? ""} /><span><strong>{session?.user.displayName}</strong><small>{session?.user.email}</small></span></a></div>
     </aside>
     {sidebarOpen && <button className="scrim" aria-label="Close menu" onClick={() => setSidebarOpen(false)} />}
     <main className="main"><header className="topbar"><button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open menu"><Menu size={22} /></button><div className="top-actions"><button className="install-pill" onClick={install}><ArrowDownLeft size={16} /> Install app</button><button className="icon-button notification-button" onClick={openNotifications} aria-label="Notifications"><Bell size={20} />{notifications.some((item) => !item.readAt) && <span className="unread-dot" />}</button><a className="icon-button" href="/settings" aria-label="User settings"><Settings size={20} /></a><Avatar name={session?.user.displayName ?? ""} /></div>
-      {notificationsOpen && <><button className="panel-scrim" aria-label="Close notifications" onClick={() => setNotificationsOpen(false)} /><div className="notification-panel"><div className="panel-title"><strong>Notifications</strong><span>{notifications.filter((item) => !item.readAt).length} new</span></div>{notifications.length ? notifications.slice(0, 8).map((item) => { const age = Date.now() - +new Date(item.createdAt); const when = age < 3_600_000 ? `${Math.max(Math.round(age / 60_000), 1)}m ago` : age < 86_400_000 ? `${Math.round(age / 3_600_000)}h ago` : new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }); return <button key={item.id} onClick={() => { setNotificationsOpen(false); const billId = item.targetPath ? new URLSearchParams(item.targetPath.split("?")[1] ?? "").get("bill") : null; if (billId) void openBill(billId); else setTab("overview"); }}>{item.type === "payment" ? <HandCoins size={18} weight="duotone" className="panel-glyph pay" /> : item.type === "balance" ? <Bell size={17} className="panel-glyph balance" /> : <ReceiptText size={17} className="panel-glyph bill" />}<span><strong>{item.title}</strong><small>{item.body}</small></span><time>{when}</time></button>; }) : <p className="panel-empty">You’re all caught up.</p>}</div></>}
+      {notificationsOpen && <><button className="panel-scrim" aria-label="Close notifications" onClick={() => setNotificationsOpen(false)} /><div className="notification-panel"><div className="panel-title"><strong>Notifications</strong><span>{notifications.filter((item) => !item.readAt).length} new</span></div>{notifications.length ? notifications.slice(0, 8).map((item) => { const age = Date.now() - +new Date(item.createdAt); const when = age < 3_600_000 ? `${Math.max(Math.round(age / 60_000), 1)}m ago` : age < 86_400_000 ? `${Math.round(age / 3_600_000)}h ago` : new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }); return <button key={item.id} onClick={() => { setNotificationsOpen(false); const billId = item.targetPath ? new URLSearchParams(item.targetPath.split("?")[1] ?? "").get("bill") : null; if (billId) void openBill(billId); else navTo("friends"); }}>{item.type === "payment" ? <HandCoins size={18} weight="duotone" className="panel-glyph pay" /> : item.type === "balance" ? <Bell size={17} className="panel-glyph balance" /> : <FileText size={17} className="panel-glyph bill" />}<span><strong>{item.title}</strong><small>{item.body}</small></span><time>{when}</time></button>; }) : <p className="panel-empty">You’re all caught up.</p>}</div></>}
     </header>
-    <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1></div><p>{tab === "overview" ? "Here’s where everyone stands today." : tab === "bills" ? "Every bill and payment, newest first." : "Recent bills, settlements, closures, and payments."}</p></div><div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div></div>
+    <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1></div><p>{tab === "friends" ? "Balances by person, across every group you share." : tab === "groups" ? "Your households and where you stand in each." : "Recent bills, settlements, closures, and payments."}</p></div><div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div></div>
       {error && <div className="error-banner">{error}<button onClick={() => void refresh()}>Try again</button></div>}
-      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onPayment={(context) => openPayment(context ?? null)} onNudge={sendNudge} onClaim={(balance) => openClaim(balance)} onEditClaim={(balance, existing) => openClaim(balance, existing)} onCancelClaim={cancelClaim} onDismissClaim={dismissClaim} onOpenBills={() => setTab("bills")} /> : tab === "bills" ? <Bills data={data!} user={session!.user} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : <Activity data={data!} user={session!.user} householdId={householdId} onBillDetail={openBill} />}
+      {loading || !allData.length ? <div className="wide-card loading-card">Refreshing ledger…</div>
+        : tab === "friends" ? (friendId
+          ? <FriendDetail households={allData} friendUserId={friendId} user={session!.user} onBack={() => setFriendId(null)} onBillDetail={openBill} onSettle={(home, balance) => { setHouseholdId(home); openPayment(balance); }} onNudge={(home, balance) => { setHouseholdId(home); void sendNudge(balance); }} onClaim={(home, balance, existing) => { setHouseholdId(home); openClaim(balance, existing); }} onCancelClaim={(home, claim) => { setHouseholdId(home); void cancelClaim(claim); }} onDismissClaim={(home, claim) => { setHouseholdId(home); void dismissClaim(claim); }} onConfirmClaim={(home, balance, claim) => { setHouseholdId(home); openPayment({ ...balance, amountCents: Math.min(claim.amountCents, balance.amountCents), note: claim.note ?? undefined }); }} />
+          : <Friends households={allData} user={session!.user} onOpenFriend={setFriendId} onInvite={() => setModal("invite")} />)
+        : tab === "groups" ? (groupId && snapshots[groupId]
+          ? <div className="group-detail"><button className="ledger-back" onClick={() => setGroupId(null)}>‹ GROUPS</button><Bills data={snapshots[groupId]} user={session!.user} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /></div>
+          : <Groups households={allData} user={session!.user} onOpenGroup={(id) => { setGroupId(id); setHouseholdId(id); }} />)
+        : <Activity data={mergedActivity!} user={session!.user} householdId={householdId} onBillDetail={openBill} />}
     </div></main>
-    <nav className="bottom-nav">{(["overview", "bills", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}</nav>
+    <nav className="bottom-nav">{(["friends", "groups", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={navTo} />)}</nav>
     <button className="fab" onClick={() => setModal("bill")} aria-label="Add bill"><Plus size={24} /></button>
     {modal === "bill" && data && <BillModal data={data} currentUserId={session?.user.id} close={() => setModal(null)} save={async (body, recurring) => { await mutate(`/api/households/${householdId}/bills`, "POST", { ...(body as object), ...(recurring ? { recurring } : {}) }); setModal(null); setToast(recurring ? "Bill and recurring schedule added." : "Bill added to the household ledger."); setAddAnother(true); await refresh(); }} />}
     {modal === "edit" && data && billDetail && <BillModal data={data} currentUserId={session?.user.id} initial={billDetail} close={() => setModal("detail")} save={async (body) => { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "PATCH", body); setModal(null); setToast("Bill updated and balances recalculated."); await refresh(); }} />}
@@ -236,54 +255,151 @@ const CATEGORY_ICONS = {
   other: ShapesDuotone,
 } satisfies Record<BillCategory, PhosphorIcon>;
 
-function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "overview" ? LayoutDashboard : item === "bills" ? ReceiptText : FileText; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{TAB_LABELS[item]}</small></button>; }
+function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "friends" ? Users : item === "groups" ? House : Clock; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{TAB_LABELS[item]}</small></button>; }
 
-function Overview({ data, user, net, onPayment, onNudge, onClaim, onEditClaim, onCancelClaim, onDismissClaim, onOpenBills }: { data: HouseholdData; user: User; net: number; onPayment: (context?: Balance & { note?: string }) => void; onNudge: (item: Balance) => void; onClaim: (item: Balance) => void; onEditClaim: (item: Balance, claim: Claim) => void; onCancelClaim: (claim: Claim) => void; onDismissClaim: (claim: Claim) => void; onOpenBills: () => void }) {
-  const currency = data.household.currency;
-  const owedToMe = data.balances.filter((item) => item.recipientUserId === user.id);
-  const iOwe = data.balances.filter((item) => item.payerUserId === user.id);
-  const others = data.balances.filter((item) => item.payerUserId !== user.id && item.recipientUserId !== user.id);
-  const claimsForMe = data.claims.filter((claim) => claim.creditorUserId === user.id);
-  const claimFor = (recipientUserId: string) => data.claims.find((claim) => claim.debtorUserId === user.id && claim.creditorUserId === recipientUserId);
-  const myPending = iOwe.map((item) => ({ item, claim: claimFor(item.recipientUserId) })).find((entry) => entry.claim);
-  const nextRecurring = data.recurring.filter((item) => item.active).sort((a, b) => +new Date(a.nextOccurrence) - +new Date(b.nextOccurrence))[0];
-  const nextDue = nextRecurring ? new Date(nextRecurring.nextOccurrence) : null;
-  const billCount = (item: Balance) => { const count = (item.components ?? []).length; return `${count || "no"} open bill${count === 1 ? "" : "s"}`; };
-  const lede = !data.balances.length ? null
-    : net > 0 ? (owedToMe.length === 1 && !iOwe.length ? <>Overall, <b className="pos">{owedToMe[0].payerName} owes you {money(net, currency)}</b></> : <>Overall, <b className="pos">you are owed {money(net, currency)}</b></>)
-    : net < 0 ? (iOwe.length === 1 && !owedToMe.length ? <>Overall, <b className="neg">you owe {iOwe[0].recipientName} {money(-net, currency)}</b></> : <>Overall, <b className="neg">you owe {money(-net, currency)}</b></>)
-    : <>Overall, <b>you are all square</b> — open balances cancel out</>;
-  return <div className="home-view">
-    {lede && <p className="home-lede">{lede}</p>}
-    {claimsForMe.map((claim) => <section className="glance-claim" key={claim.id}>
-      <div className="glance-claim-top"><Avatar name={claim.debtorName ?? ""} /><span className="glance-who"><strong>{claim.debtorName} says they paid you</strong><small>{claim.note ? `“${claim.note}” · ` : ""}{new Date(claim.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</small></span><span className="glance-amt claim">{money(claim.amountCents, currency)}</span></div>
-      <div className="glance-actions"><button className="glance-confirm" onClick={() => { const balance = data.balances.find((item) => item.payerUserId === claim.debtorUserId && item.recipientUserId === user.id); if (balance) onPayment({ ...balance, amountCents: Math.min(claim.amountCents, balance.amountCents), note: claim.note ?? undefined }); }}>Confirm received</button><button className="glance-remind danger" onClick={() => void onDismissClaim(claim)}>I didn’t get this</button></div>
-    </section>)}
-    {data.balances.length > 0 && <div className="home-zone">
-      {owedToMe.map((item) => <button className="home-row" key={`${item.payerUserId}:${item.recipientUserId}`} onClick={onOpenBills}>
-        <Avatar name={item.payerName ?? ""} />
-        <span className="home-who"><b>{item.payerName}</b><small>{billCount(item)}</small></span>
-        <span className="home-amt pos"><b>{money(item.amountCents, currency)}</b><small>owes you</small></span>
+type FriendAgg = { userId: string; name: string; net: number; openBills: number; groups: string[] };
+
+function friendAggregates(households: HouseholdData[], userId: string) {
+  const map = new Map<string, FriendAgg>();
+  for (const snapshot of households) {
+    for (const member of snapshot.members) {
+      if (member.id === userId) continue;
+      const entry = map.get(member.id) ?? { userId: member.id, name: member.displayName, net: 0, openBills: 0, groups: [] };
+      if (!entry.groups.includes(snapshot.household.name)) entry.groups.push(snapshot.household.name);
+      map.set(member.id, entry);
+    }
+    for (const balance of snapshot.balances) {
+      const other = balance.recipientUserId === userId ? balance.payerUserId : balance.payerUserId === userId ? balance.recipientUserId : null;
+      if (!other) continue;
+      const entry = map.get(other);
+      if (!entry) continue;
+      entry.net += balance.recipientUserId === userId ? balance.amountCents : -balance.amountCents;
+      entry.openBills += (balance.components ?? []).length;
+    }
+  }
+  return [...map.values()].sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+}
+
+function Friends({ households, user, onOpenFriend, onInvite }: { households: HouseholdData[]; user: User; onOpenFriend: (id: string) => void; onInvite: () => void }) {
+  const currency = households[0].household.currency;
+  const friends = friendAggregates(households, user.id);
+  const net = friends.reduce((sum, friend) => sum + friend.net, 0);
+  return <div className="ledger-view">
+    <p className="ledger-k">{net > 0 ? "You are owed" : net < 0 ? "You owe" : "All settled"}</p>
+    {net !== 0 && <p className={`ledger-big ${net > 0 ? "pos" : "neg"}`}>{money(Math.abs(net), currency)}</p>}
+    <hr className="ledger-rule" />
+    <div className="ledger-list">
+      {friends.map((friend) => <button className="fr-row" key={friend.userId} onClick={() => onOpenFriend(friend.userId)}>
+        <span className="fr-avatar">{initials(friend.name)}</span>
+        <span className="fr-who"><b>{friend.name}</b><small>{friend.groups.join(" · ")}{friend.openBills ? ` · ${friend.openBills} open bill${friend.openBills === 1 ? "" : "s"}` : ""}</small></span>
+        {friend.net === 0 ? <span className="fr-amt zero"><b>settled</b><small>✓</small></span>
+          : <span className={`fr-amt ${friend.net > 0 ? "pos" : "neg"}`}><b>{money(Math.abs(friend.net), currency)}</b><small>{friend.net > 0 ? "owes you" : "you owe"}</small></span>}
       </button>)}
-      {iOwe.map((item) => { const claim = claimFor(item.recipientUserId); return <button className="home-row" key={`${item.payerUserId}:${item.recipientUserId}`} onClick={onOpenBills}>
-        <Avatar name={item.recipientName ?? ""} />
-        <span className="home-who"><b>{item.recipientName}</b><small>{claim ? `you said you paid ${money(claim.amountCents, currency)} — waiting on them` : billCount(item)}</small></span>
-        <span className="home-amt neg"><b>{money(item.amountCents, currency)}</b><small>you owe</small></span>
-      </button>; })}
-      {others.map((item) => <button className="home-row other" key={`${item.payerUserId}:${item.recipientUserId}`} onClick={onOpenBills}>
-        <span className="avatar-pair"><Avatar name={item.payerName ?? ""} /><Avatar name={item.recipientName ?? ""} /></span>
-        <span className="home-who"><b>{item.payerName} → {item.recipientName}</b><small>{billCount(item)}</small></span>
-        <span className="home-amt"><b>{money(item.amountCents, currency)}</b><small>owes</small></span>
-      </button>)}
-    </div>}
-    {!data.balances.length && <section className="glance-card glance-settled"><Check size={26} /><strong>Everyone is settled up</strong><small>New bills will appear here as balances open.</small></section>}
-    {data.balances.length > 0 && <div className="home-actions">
-      {owedToMe.length > 0 && <button className="home-cta" onClick={() => onPayment()}>Settle up</button>}
-      {owedToMe.length > 0 && <button className="home-quiet" onClick={() => void onNudge(owedToMe[0])}>Remind</button>}
-      {iOwe.length > 0 && !myPending && <button className={owedToMe.length ? "home-quiet" : "home-cta"} onClick={() => onClaim(iOwe[0])}>{iOwe.length === 1 ? `I paid ${iOwe[0].recipientName}` : "Mark a payment as sent"}</button>}
-      {myPending?.claim && <><button className="home-quiet" onClick={() => onEditClaim(myPending.item, myPending.claim!)}>Edit claim</button><button className="home-quiet danger" onClick={() => void onCancelClaim(myPending.claim!)}>Cancel claim</button></>}
-    </div>}
-    {nextRecurring && nextDue && <button className="glance-due home-due" onClick={onOpenBills}><span className="glance-when">{nextDue.toLocaleDateString(undefined, { month: "short" }).toUpperCase()} {nextDue.getDate()}</span><span className="glance-due-what"><strong>Coming up · {nextRecurring.name}</strong><small>recurring · splits {nextRecurring.templateConfig.allocations.length} way{nextRecurring.templateConfig.allocations.length === 1 ? "" : "s"}</small></span><strong className="glance-due-amt">{nextRecurring.expectedAmountCents === null ? "varies" : money(nextRecurring.expectedAmountCents, currency)}</strong></button>}
+      <button className="fr-row invite" onClick={onInvite}><span className="fr-avatar dashed">+</span><span className="fr-who"><b>Invite a roommate</b><small>they join one of your groups</small></span></button>
+    </div>
+  </div>;
+}
+
+function FriendDetail({ households, friendUserId, user, onBack, onBillDetail, onSettle, onNudge, onClaim, onCancelClaim, onDismissClaim, onConfirmClaim }: { households: HouseholdData[]; friendUserId: string; user: User; onBack: () => void; onBillDetail: (id: string) => void; onSettle: (home: string, balance: Balance) => void; onNudge: (home: string, balance: Balance) => void; onClaim: (home: string, balance: Balance, existing?: Claim) => void; onCancelClaim: (home: string, claim: Claim) => void; onDismissClaim: (home: string, claim: Claim) => void; onConfirmClaim: (home: string, balance: Balance, claim: Claim) => void }) {
+  const shared = households.filter((snapshot) => snapshot.members.some((member) => member.id === friendUserId));
+  if (!shared.length) return null;
+  const currency = shared[0].household.currency;
+  const friendName = shared[0].members.find((member) => member.id === friendUserId)?.displayName ?? "them";
+  let net = 0;
+  const pairs: Array<{ home: string; balance: Balance; direction: "in" | "out" }> = [];
+  for (const snapshot of shared) for (const balance of snapshot.balances) {
+    if (balance.recipientUserId === user.id && balance.payerUserId === friendUserId) { net += balance.amountCents; pairs.push({ home: snapshot.household.id, balance, direction: "in" }); }
+    if (balance.payerUserId === user.id && balance.recipientUserId === friendUserId) { net -= balance.amountCents; pairs.push({ home: snapshot.household.id, balance, direction: "out" }); }
+  }
+  const incoming = pairs.find((pair) => pair.direction === "in");
+  const outgoing = pairs.find((pair) => pair.direction === "out");
+  const claimsToMe: Array<{ home: string; claim: Claim; balance: Balance }> = [];
+  let myClaim: { home: string; claim: Claim; balance: Balance } | undefined;
+  for (const snapshot of shared) for (const claim of snapshot.claims) {
+    if (claim.creditorUserId === user.id && claim.debtorUserId === friendUserId) { const balance = snapshot.balances.find((item) => item.payerUserId === friendUserId && item.recipientUserId === user.id); if (balance) claimsToMe.push({ home: snapshot.household.id, claim, balance }); }
+    if (claim.debtorUserId === user.id && claim.creditorUserId === friendUserId && !myClaim) { const balance = snapshot.balances.find((item) => item.payerUserId === user.id && item.recipientUserId === friendUserId); if (balance) myClaim = { home: snapshot.household.id, claim, balance }; }
+  }
+  type Row = { key: string; when: number; month: string; groupName: string; kind: "bill"; bill: Bill } | { key: string; when: number; month: string; groupName: string; kind: "payment"; payment: Payment };
+  const monthOf = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const rows: Row[] = [];
+  const manyGroups = shared.length > 1;
+  for (const snapshot of shared) {
+    const groupName = snapshot.household.name;
+    for (const bill of snapshot.bills) if (bill.payerUserId === user.id || bill.payerUserId === friendUserId) rows.push({ key: `bill:${bill.id}`, when: +new Date(bill.dueDate ?? bill.createdAt), month: bill.periodLabel, groupName, kind: "bill", bill });
+    for (const payment of snapshot.payments) if ((payment.payerUserId === user.id && payment.recipientUserId === friendUserId) || (payment.payerUserId === friendUserId && payment.recipientUserId === user.id)) rows.push({ key: `payment:${payment.id}`, when: +new Date(payment.paidAt), month: monthOf(payment.paidAt), groupName, kind: "payment", payment });
+  }
+  rows.sort((a, b) => b.when - a.when);
+  const groups: Array<{ month: string; groupName: string; rows: Row[] }> = [];
+  for (const row of rows) { const bucket = groups.find((entry) => entry.month === row.month && entry.groupName === row.groupName); if (bucket) bucket.rows.push(row); else groups.push({ month: row.month, groupName: row.groupName, rows: [row] }); }
+  const shareFor = (snapshotBill: Bill) => {
+    for (const snapshot of shared) for (const balance of snapshot.balances) {
+      const mineOut = balance.payerUserId === user.id && balance.recipientUserId === friendUserId;
+      const mineIn = balance.recipientUserId === user.id && balance.payerUserId === friendUserId;
+      if (!mineOut && !mineIn) continue;
+      const component = (balance.components ?? []).find((item) => item.billId === snapshotBill.id);
+      if (component) return mineIn ? { label: "you lent", amount: money(component.amountCents, currency), tone: "lent" } : { label: "you borrowed", amount: money(component.amountCents, currency), tone: "borrowed" };
+    }
+    return snapshotBill.status === "settled" ? { label: "settled", amount: "✓", tone: "done" } : { label: "no share", amount: "—", tone: "done" };
+  };
+  const firstName = (name?: string | null) => (name ?? "").split(/\s+/)[0] || "Someone";
+  return <div className="ledger-view">
+    <button className="ledger-back" onClick={onBack}>‹ FRIENDS</button>
+    <div className="fr-hero"><span className="fr-avatar big">{initials(friendName)}</span><span className="fr-hero-text"><b>{friendName}</b><small className={net > 0 ? "pos" : net < 0 ? "neg" : ""}>{net > 0 ? `owes you ${money(net, currency)}` : net < 0 ? `you owe ${money(-net, currency)}` : "settled up"}</small></span></div>
+    {claimsToMe.map(({ home, claim, balance }) => <div className="ledger-claim" key={claim.id}>
+      <p><b>{friendName} says they paid you {money(claim.amountCents, currency)}.</b>{claim.note ? ` “${claim.note}”` : ""}</p>
+      <div className="ledger-btnrow"><button className="ledger-btn solid" onClick={() => onConfirmClaim(home, balance, claim)}>Confirm received</button><button className="ledger-btn ghost danger" onClick={() => onDismissClaim(home, claim)}>I didn’t get this</button></div>
+    </div>)}
+    <div className="ledger-btnrow">
+      {incoming && <button className="ledger-btn solid" onClick={() => onSettle(incoming.home, incoming.balance)}>Settle up</button>}
+      {incoming && <button className="ledger-btn ghost" onClick={() => onNudge(incoming.home, incoming.balance)}>Remind</button>}
+      {outgoing && !myClaim && <button className={`ledger-btn ${incoming ? "ghost" : "solid"}`} onClick={() => onClaim(outgoing.home, outgoing.balance)}>I paid {firstName(friendName)}</button>}
+      {myClaim && <button className="ledger-btn ghost" onClick={() => onClaim(myClaim!.home, myClaim!.balance, myClaim!.claim)}>Edit claim</button>}
+      {myClaim && <button className="ledger-btn ghost danger" onClick={() => onCancelClaim(myClaim!.home, myClaim!.claim)}>Cancel claim</button>}
+    </div>
+    {groups.map((bucket) => <div key={`${bucket.groupName}:${bucket.month}`}>
+      <div className="feed-month-head"><b>{manyGroups ? `${bucket.groupName} · ${bucket.month}` : bucket.month}</b><span className="num">{money(bucket.rows.reduce((sum, row) => sum + (row.kind === "bill" ? row.bill.amountCents : 0), 0), currency)}</span></div>
+      {bucket.rows.map((row) => {
+        if (row.kind === "bill") {
+          const bill = row.bill;
+          const Icon = CATEGORY_ICONS[bill.category] ?? CATEGORY_ICONS.other;
+          const side = shareFor(bill);
+          const date = new Date(bill.dueDate ?? bill.createdAt);
+          return <button className="feed-row" key={row.key} onClick={() => onBillDetail(bill.id)}>
+            <span className="feed-date"><small>{date.toLocaleDateString(undefined, { month: "short" })}</small><b>{date.getDate()}</b></span>
+            <Icon size={19} weight="duotone" className={`feed-glyph bill-cat cat-${bill.category}`} aria-hidden="true" />
+            <span className="feed-main"><b>{bill.name}</b><small>{bill.payerUserId === user.id ? "You" : firstName(bill.payerName ?? bill.createdByName)} paid {money(bill.amountCents, currency)}</small></span>
+            <span className={`feed-side ${side.tone}`}><small>{side.label}</small><b>{side.amount}</b></span>
+          </button>;
+        }
+        const payment = row.payment;
+        const date = new Date(payment.paidAt);
+        return <button className="feed-row pay" key={row.key} disabled={!payment.billId} onClick={() => payment.billId && onBillDetail(payment.billId)}>
+          <span className="feed-date"><small>{date.toLocaleDateString(undefined, { month: "short" })}</small><b>{date.getDate()}</b></span>
+          <HandCoins size={19} weight="duotone" className="feed-glyph glyph-pay" aria-hidden="true" />
+          <span className="feed-main"><b>{payment.payerUserId === user.id ? "You" : firstName(payment.payerName)} paid {payment.recipientUserId === user.id ? "you" : firstName(payment.recipientName)}</b><small>{payment.billName ? `toward ${payment.billName}` : "payment"} · confirmed</small></span>
+          <span className="feed-side pay"><b>{payment.recipientUserId === user.id ? "+" : ""}{money(payment.amountCents, currency)}</b></span>
+        </button>;
+      })}
+    </div>)}
+    {!rows.length && <p className="empty-copy">Nothing shared with {friendName} yet.</p>}
+  </div>;
+}
+
+function Groups({ households, user, onOpenGroup }: { households: HouseholdData[]; user: User; onOpenGroup: (id: string) => void }) {
+  return <div className="ledger-view">
+    <div className="ledger-list">
+      {households.map((snapshot) => {
+        const currency = snapshot.household.currency;
+        const net = snapshot.balances.reduce((sum, item) => sum + (item.recipientUserId === user.id ? item.amountCents : 0) - (item.payerUserId === user.id ? item.amountCents : 0), 0);
+        return <button className="fr-row" key={snapshot.household.id} onClick={() => onOpenGroup(snapshot.household.id)}>
+          <span className="gr-avatar">{initials(snapshot.household.name)}</span>
+          <span className="fr-who"><b>{snapshot.household.name}</b><small>{snapshot.members.length} {snapshot.members.length === 1 ? "person" : "people"} · {snapshot.bills.filter((bill) => bill.status === "open").length} open bills</small></span>
+          {net === 0 ? <span className="fr-amt zero"><b>settled</b><small>✓</small></span>
+            : <span className={`fr-amt ${net > 0 ? "pos" : "neg"}`}><b>{money(Math.abs(net), currency)}</b><small>{net > 0 ? "you are owed" : "you owe"}</small></span>}
+        </button>;
+      })}
+    </div>
+    <p className="ledger-note">Starting a new group is an admin task for now — ask your administrator.</p>
   </div>;
 }
 
