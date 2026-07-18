@@ -345,11 +345,12 @@ function FriendDetail({ households, friendUserId, user, onBack, onBillDetail, on
       <p><b>{friendName} says they paid you {money(claim.amountCents, currency)}.</b>{claim.note ? ` “${claim.note}”` : ""}</p>
       <div className="ledger-btnrow"><button className="ledger-btn solid" onClick={() => onConfirmClaim(home, balance, claim)}>Confirm received</button><button className="ledger-btn ghost danger" onClick={() => onDismissClaim(home, claim)}>I didn’t get this</button></div>
     </div>)}
+    {myClaim && <span className="ledger-pend"><i />you sent {money(myClaim.claim.amountCents, currency)} · waiting on {firstName(friendName)}</span>}
     {(outgoing || incoming) && <div className="ledger-btnrow">
-      {outgoing && !myClaim && <button className="ledger-btn solid" onClick={() => onClaim(outgoing.home, outgoing.balance)}>Settle up</button>}
+      {outgoing && !myClaim && <button className="ledger-btn solid" onClick={() => onClaim(outgoing.home, outgoing.balance)}>Pay</button>}
       {incoming && <button className="ledger-btn ghost" onClick={() => onNudge(incoming.home, incoming.balance)}>Remind</button>}
-      {myClaim && <button className="ledger-btn ghost" onClick={() => onClaim(myClaim!.home, myClaim!.balance, myClaim!.claim)}>Edit claim</button>}
-      {myClaim && <button className="ledger-btn ghost danger" onClick={() => onCancelClaim(myClaim!.home, myClaim!.claim)}>Cancel claim</button>}
+      {myClaim && <button className="ledger-btn ghost" onClick={() => onClaim(myClaim!.home, myClaim!.balance, myClaim!.claim)}>Edit</button>}
+      {myClaim && <button className="ledger-btn ghost danger" onClick={() => onCancelClaim(myClaim!.home, myClaim!.claim)}>Cancel</button>}
     </div>}
     {incoming && !outgoing && !claimsToMe.length && <p className="ledger-note">You owe nothing here — when {friendName} marks a payment as sent, you’ll confirm it right on this page.</p>}
     {!incoming && !outgoing && <p className="ledger-note">You’re all square with {friendName}. 🎉</p>}
@@ -617,7 +618,7 @@ function ClaimModal({ balance, existing, initialCents, currency, close, save }: 
     try { await save({ ...(existing ? {} : { creditorUserId: balance.recipientUserId }), amountCents, ...(note.trim() ? { note: note.trim() } : {}) }); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "The claim could not be sent"); setBusy(false); }
   }
-  return <Modal title={`Settle up with ${balance.recipientName ?? "them"}`} subtitle={`Enter what you sent — the balance changes when ${balance.recipientName ?? "they"} confirms it arrived`} close={close}><form className="pm" onSubmit={submit}>
+  return <Modal title={`Pay ${balance.recipientName ?? "them"}`} subtitle={`Enter what you sent — the balance changes when ${balance.recipientName ?? "they"} confirms it arrived`} close={close}><form className="pm" onSubmit={submit}>
     <label className="pm-amount"><span>$</span><input type="number" inputMode="decimal" min="0.01" max={(maxCents / 100).toFixed(2)} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus /></label>
     <div className="pm-chips"><button type="button" className={chip === "all" ? "on" : ""} onClick={() => setAmount((maxCents / 100).toFixed(2))}>All {money(maxCents, currency)}</button><button type="button" className={chip === "half" ? "on" : ""} onClick={() => setAmount((halfCents / 100).toFixed(2))}>Half</button><button type="button" className={chip === "custom" ? "on" : ""} onClick={() => setAmount("")}>Custom</button></div>
     {overMax && <p className="pm-conseq part">more than you owe — max {money(maxCents, currency)}</p>}
