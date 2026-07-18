@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb } from "@/db";
 import { billAllocations, billChangeHistory, billContributions, bills, obligations, paymentClaims, payments, recurringBillTemplates, users } from "@/db/schema";
@@ -147,7 +147,7 @@ export async function householdSnapshot(householdId: string) {
   const names = userIds.length ? await db.select({ id: users.id, displayName: users.displayName }).from(users).where(inArray(users.id, userIds)) : [];
   const nameMap = new Map(names.map((item) => [item.id, item.displayName]));
   return {
-    bills: billRows.map((bill) => ({ ...bill, createdByName: nameMap.get(bill.createdByUserId), payerUserId: primaryPayer.get(bill.id)?.payerUserId ?? null, payerName: primaryPayer.get(bill.id) ? nameMap.get(primaryPayer.get(bill.id)!.payerUserId) : null })),
+    bills: billRows.map((bill) => ({ ...bill, createdByName: nameMap.get(bill.createdByUserId), payerUserId: primaryPayer.get(bill.id)?.payerUserId ?? null, payerName: primaryPayer.get(bill.id) ? nameMap.get(primaryPayer.get(bill.id)!.payerUserId) : null, obligations: obligationRows.filter((item) => item.billId === bill.id).map((item) => ({ debtorUserId: item.debtorUserId, creditorUserId: item.creditorUserId, amountCents: item.amountCents })) })),
     balances: balances.map((item) => ({ ...item, payerName: nameMap.get(item.payerUserId), recipientName: nameMap.get(item.recipientUserId), components: componentsFor(item.payerUserId, item.recipientUserId, item.amountCents) })),
     simplifiedBalances: simplified.map((item) => ({ ...item, payerName: nameMap.get(item.payerUserId), recipientName: nameMap.get(item.recipientUserId) })),
     payments: paymentRows.map((payment) => ({ ...payment, actorName: nameMap.get(payment.createdByUserId) })),
@@ -161,9 +161,3 @@ export async function outstandingForPair(householdId: string, payerUserId: strin
   return snapshot.balances.find((item) => item.payerUserId === payerUserId && item.recipientUserId === recipientUserId)?.amountCents ?? 0;
 }
 
-export async function outstandingForBillPair(householdId: string, billId: string, payerUserId: string, recipientUserId: string) {
-  const db = getDb();
-  const [owed] = await db.select({ amount: sql<number>`coalesce(sum(${obligations.originalAmountCents}), 0)` }).from(obligations).where(and(eq(obligations.householdId, householdId), eq(obligations.billId, billId), eq(obligations.debtorUserId, payerUserId), eq(obligations.creditorUserId, recipientUserId), eq(obligations.active, true)));
-  const [paid] = await db.select({ amount: sql<number>`coalesce(sum(${payments.amountCents}), 0)` }).from(payments).where(and(eq(payments.householdId, householdId), eq(payments.billId, billId), eq(payments.payerUserId, payerUserId), eq(payments.recipientUserId, recipientUserId)));
-  return Math.max(0, Number(owed?.amount ?? 0) - Number(paid?.amount ?? 0));
-}

@@ -12,7 +12,7 @@ type ModalName = "bill" | "edit" | "payment" | "recurring-edit" | "detail" | "in
 type User = { id: string; email: string; displayName: string; role: "member" | "administrator" };
 type HouseholdListItem = { id: string; name: string; currency: string };
 type Member = { id: string; displayName: string; email: string };
-type Bill = { id: string; name: string; category: BillCategory; amountCents: number; periodLabel: string; dueDate?: string | null; amountState: "estimated" | "final"; status: "draft" | "open" | "settled" | "void"; createdByName?: string; payerUserId?: string | null; payerName?: string | null; createdAt: string };
+type Bill = { id: string; name: string; category: BillCategory; amountCents: number; periodLabel: string; dueDate?: string | null; amountState: "estimated" | "final"; status: "draft" | "open" | "settled" | "void"; createdByName?: string; payerUserId?: string | null; payerName?: string | null; obligations?: Array<{ debtorUserId: string; creditorUserId: string; amountCents: number }>; createdAt: string };
 type BalanceComponent = { billId: string; billName: string; category: BillCategory; amountCents: number };
 type Balance = { payerUserId: string; recipientUserId: string; payerName?: string; recipientName?: string; amountCents: number; components?: BalanceComponent[] };
 type Payment = { id: string; billId?: string | null; payerUserId: string; recipientUserId: string; payerName?: string; recipientName?: string; actorName?: string; billName?: string | null; amountCents: number; note?: string | null; paidAt: string };
@@ -47,7 +47,7 @@ export function HouseholdApp() {
   const [error, setError] = useState("");
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
   const [billDetail, setBillDetail] = useState<BillDetailData | null>(null);
-  const [paymentContext, setPaymentContext] = useState<(Balance & { billId?: string | null; billName?: string; note?: string }) | null>(null);
+  const [paymentContext, setPaymentContext] = useState<(Balance & { note?: string }) | null>(null);
   const [selectedRecurring, setSelectedRecurring] = useState<Recurring | null>(null);
   const [claimContext, setClaimContext] = useState<{ balance: Balance; existing?: Claim; initialCents?: number } | null>(null);
   const data = householdId ? snapshots[householdId] ?? null : null;
@@ -147,7 +147,7 @@ export function HouseholdApp() {
     setBillDetail(body); setModal("detail");
   }
 
-  function openPayment(context: (Balance & { billId?: string | null; billName?: string; note?: string }) | null = null) { setPaymentContext(context); setModal("payment"); }
+  function openPayment(context: (Balance & { note?: string }) | null = null) { setPaymentContext(context); setModal("payment"); }
 
   async function addComment(billId: string, body: string) {
     await mutate(`/api/households/${householdId}/bills/${billId}/comments`, "POST", { body });
@@ -238,7 +238,7 @@ export function HouseholdApp() {
     {modal === "payment" && data && <PaymentModal data={data} currentUserId={session?.user.id ?? ""} specific={paymentContext} close={() => { setModal(null); setPaymentContext(null); }} save={async (body) => { await mutate(`/api/households/${householdId}/payments`, "POST", body); setModal(null); setPaymentContext(null); setToast("Payment confirmed."); await refresh(); }} />}
     {modal === "recurring-edit" && data && selectedRecurring && <RecurringModal data={data} initial={selectedRecurring} close={() => setModal(null)} save={async (body) => { await mutate(`/api/households/${householdId}/recurring/${selectedRecurring.id}`, "PATCH", body); setModal(null); setSelectedRecurring(null); setToast("Future recurring bills will use the updated schedule."); await refresh(); }} remove={async () => { if (!confirm("Delete this schedule? Bills it already created are untouched.")) return; try { await mutate(`/api/households/${householdId}/recurring/${selectedRecurring.id}`, "DELETE"); setModal(null); setSelectedRecurring(null); setToast("Schedule deleted."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "The schedule could not be deleted"); } }} />}
     {modal === "invite" && data && <InviteModal householdName={data.household.name} householdId={householdId} mutate={mutate} close={() => setModal(null)} />}
-    {modal === "detail" && billDetail && <BillDetailModal detail={billDetail} userId={session?.user.id ?? ""} currency={data?.household.currency ?? "USD"} claims={data?.claims ?? []} canClaim={(item) => Boolean(data?.balances.some((candidate) => candidate.payerUserId === item.debtorUserId && candidate.recipientUserId === item.creditorUserId && candidate.amountCents > 0))} onClaim={(item) => { const balance = data?.balances.find((candidate) => candidate.payerUserId === item.debtorUserId && candidate.recipientUserId === item.creditorUserId); if (balance) { setModal(null); openClaim(balance, undefined, item.outstandingAmountCents); } }} addComment={(body) => addComment(billDetail.bill.id, body)} uploadAttachment={(file) => uploadAttachment(billDetail.bill.id, file)} removeAttachment={(attachmentId) => removeAttachment(billDetail.bill.id, attachmentId)} attachmentHref={(attachmentId) => `/api/households/${householdId}/bills/${billDetail.bill.id}/attachments/${attachmentId}`} close={() => setModal(null)} edit={() => setModal("edit")} remove={async () => { if (!confirm("Remove this bill and recalculate Household balances? The audit record is retained.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "DELETE"); setModal(null); setToast("Bill removed and balances recalculated."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Bill could not be removed"); } }} record={(item) => openPayment({ billId: billDetail.bill.id, billName: billDetail.bill.name, payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, payerName: item.debtorName, recipientName: item.creditorName, amountCents: item.outstandingAmountCents })} settle={async (item) => { if (!confirm(`Confirm receipt of ${money(item.outstandingAmountCents, data?.household.currency ?? "USD")} from ${item.debtorName} and mark this share settled?`)) return; try { await mutate(`/api/households/${householdId}/payments`, "POST", { idempotencyKey: crypto.randomUUID(), billId: billDetail.bill.id, payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, amountCents: item.outstandingAmountCents, note: "Marked settled", paidAt: new Date().toISOString() }); setToast(`${item.debtorName}’s share was settled.`); await refresh(); await openBill(billDetail.bill.id); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Share could not be settled"); } }} closeWithoutPayment={async () => { if (!confirm("Close this entire expense without recording payments? Use this only when settlement was recorded separately.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}/close`, "POST"); setModal(null); setToast("Expense closed without recording another payment."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Expense could not be closed"); } }} />}
+    {modal === "detail" && billDetail && <BillDetailModal detail={billDetail} userId={session?.user.id ?? ""} currency={data?.household.currency ?? "USD"} claims={data?.claims ?? []} canClaim={(item) => Boolean(data?.balances.some((candidate) => candidate.payerUserId === item.debtorUserId && candidate.recipientUserId === item.creditorUserId && candidate.amountCents > 0))} onClaim={(item) => { const balance = data?.balances.find((candidate) => candidate.payerUserId === item.debtorUserId && candidate.recipientUserId === item.creditorUserId); if (balance) { setModal(null); openClaim(balance, undefined, item.outstandingAmountCents); } }} addComment={(body) => addComment(billDetail.bill.id, body)} uploadAttachment={(file) => uploadAttachment(billDetail.bill.id, file)} removeAttachment={(attachmentId) => removeAttachment(billDetail.bill.id, attachmentId)} attachmentHref={(attachmentId) => `/api/households/${householdId}/bills/${billDetail.bill.id}/attachments/${attachmentId}`} close={() => setModal(null)} edit={() => setModal("edit")} remove={async () => { if (!confirm("Remove this bill and recalculate Household balances? The audit record is retained.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "DELETE"); setModal(null); setToast("Bill removed and balances recalculated."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Bill could not be removed"); } }} />}
     {toast && <div className="toast"><span><Check size={16} /></span>{toast}{addAnother && <button className="toast-action" onClick={() => { setToast(""); setAddAnother(false); setModal("bill"); }}>Add another</button>}</div>}
   </div>;
 }
@@ -332,14 +332,11 @@ function FriendDetail({ households, friendUserId, user, onBack, onBillDetail, on
   const groups: Array<{ month: string; groupName: string; rows: Row[] }> = [];
   for (const row of rows) { const bucket = groups.find((entry) => entry.month === row.month && entry.groupName === row.groupName); if (bucket) bucket.rows.push(row); else groups.push({ month: row.month, groupName: row.groupName, rows: [row] }); }
   const shareFor = (snapshotBill: Bill) => {
-    for (const snapshot of shared) for (const balance of snapshot.balances) {
-      const mineOut = balance.payerUserId === user.id && balance.recipientUserId === friendUserId;
-      const mineIn = balance.recipientUserId === user.id && balance.payerUserId === friendUserId;
-      if (!mineOut && !mineIn) continue;
-      const component = (balance.components ?? []).find((item) => item.billId === snapshotBill.id);
-      if (component) return mineIn ? { label: "you lent", amount: money(component.amountCents, currency), tone: "lent" } : { label: "you borrowed", amount: money(component.amountCents, currency), tone: "borrowed" };
-    }
-    return snapshotBill.status === "settled" ? { label: "settled", amount: "✓", tone: "done" } : { label: "no share", amount: "—", tone: "done" };
+    const lent = (snapshotBill.obligations ?? []).filter((item) => item.creditorUserId === user.id && item.debtorUserId === friendUserId).reduce((sum, item) => sum + item.amountCents, 0);
+    const borrowed = (snapshotBill.obligations ?? []).filter((item) => item.debtorUserId === user.id && item.creditorUserId === friendUserId).reduce((sum, item) => sum + item.amountCents, 0);
+    if (borrowed > 0) return { label: "you borrowed", amount: money(borrowed, currency), tone: "borrowed" };
+    if (lent > 0) return { label: "you lent", amount: money(lent, currency), tone: "lent" };
+    return { label: "no share", amount: "—", tone: "done" };
   };
   const firstName = (name?: string | null) => (name ?? "").split(/\s+/)[0] || "Someone";
   return <div className="ledger-view">
@@ -408,13 +405,6 @@ function Bills({ data, user, onBillDetail, onEditRecurring }: { data: HouseholdD
   const [schedOpen, setSchedOpen] = useState(false);
   const schedules = [...data.recurring].sort((a, b) => +new Date(a.nextOccurrence) - +new Date(b.nextOccurrence));
   const monthlyEquivalent = Math.round(schedules.reduce((sum, item) => { if (!item.active || item.expectedAmountCents === null) return sum; const factor = item.cadence === "weekly" ? 52 / 12 : item.cadence === "monthly" ? 1 : item.cadence === "quarterly" ? 1 / 3 : 1 / 12; return sum + item.expectedAmountCents * factor; }, 0));
-  // Personal amounts per bill, from the same balance components the homepage uses.
-  const youOweByBill = new Map<string, number>();
-  const owedToYouByBill = new Map<string, number>();
-  for (const balance of data.balances) for (const component of balance.components ?? []) {
-    if (balance.payerUserId === user.id) youOweByBill.set(component.billId, (youOweByBill.get(component.billId) ?? 0) + component.amountCents);
-    if (balance.recipientUserId === user.id) owedToYouByBill.set(component.billId, (owedToYouByBill.get(component.billId) ?? 0) + component.amountCents);
-  }
   type FeedItem = { key: string; when: number; month: string; kind: "bill"; bill: Bill } | { key: string; when: number; month: string; kind: "payment"; payment: Payment };
   const monthOf = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "long", year: "numeric" });
   const items: FeedItem[] = [
@@ -425,17 +415,15 @@ function Bills({ data, user, onBillDetail, onEditRecurring }: { data: HouseholdD
   for (const item of items) { const group = groups.find((entry) => entry.month === item.month); if (group) group.items.push(item); else groups.push({ month: item.month, items: [item] }); }
   const monthMeta = (group: { month: string; items: FeedItem[] }) => {
     const monthBills = group.items.filter((item) => item.kind === "bill").map((item) => (item as { bill: Bill }).bill);
-    if (!monthBills.length) return { label: "payments", done: false };
-    const recorded = monthBills.reduce((sum, bill) => sum + bill.amountCents, 0);
-    const done = monthBills.every((bill) => bill.status === "settled");
-    return done ? { label: "settled up ✓", done: true } : { label: `${money(recorded, currency)} recorded`, done: false };
+    if (!monthBills.length) return { label: "payments" };
+    return { label: `${money(monthBills.reduce((sum, bill) => sum + bill.amountCents, 0), currency)} recorded` };
   };
+  // Splitwise-style permanent history: a bill row always shows your original share.
   const sideFor = (bill: Bill) => {
-    const owe = youOweByBill.get(bill.id) ?? 0;
-    const owed = owedToYouByBill.get(bill.id) ?? 0;
-    if (owe > 0) return { label: "you borrowed", amount: money(owe, currency), tone: "borrowed" };
-    if (owed > 0) return { label: "you lent", amount: money(owed, currency), tone: "lent" };
-    if (bill.status === "settled") return { label: "settled", amount: "✓", tone: "done" };
+    const lent = (bill.obligations ?? []).filter((item) => item.creditorUserId === user.id).reduce((sum, item) => sum + item.amountCents, 0);
+    const borrowed = (bill.obligations ?? []).filter((item) => item.debtorUserId === user.id).reduce((sum, item) => sum + item.amountCents, 0);
+    if (borrowed > 0) return { label: "you borrowed", amount: money(borrowed, currency), tone: "borrowed" };
+    if (lent > 0) return { label: "you lent", amount: money(lent, currency), tone: "lent" };
     return { label: "not involved", amount: "—", tone: "done" };
   };
   const firstName = (name?: string | null) => (name ?? "").split(/\s+/)[0] || "Someone";
@@ -452,7 +440,7 @@ function Bills({ data, user, onBillDetail, onEditRecurring }: { data: HouseholdD
     </button>; })}
     {schedOpen && !schedules.length && <p className="empty-copy">Enable “repeats” while adding a bill to schedule it.</p>}
     {groups.map((group) => { const meta = monthMeta(group); return <div className="feed-month" key={group.month}>
-      <div className="feed-month-head"><b>{group.month}</b><span className={meta.done ? "done" : ""}>{meta.label}</span></div>
+      <div className="feed-month-head"><b>{group.month}</b><span>{meta.label}</span></div>
       {group.items.map((item) => {
         if (item.kind === "bill") {
           const bill = item.bill;
@@ -639,13 +627,12 @@ function ClaimModal({ balance, existing, initialCents, currency, close, save }: 
     <button type="button" className="pm-cancel" onClick={close}>Cancel</button>
   </form></Modal>; }
 
-function PaymentModal({ data, currentUserId, specific, close, save }: { data: HouseholdData; currentUserId: string; specific: (Balance & { billId?: string | null; billName?: string; note?: string }) | null; close: () => void; save: (body: unknown) => Promise<void> }) {
-  const billLocked = Boolean(specific?.billId);
-  const choices = billLocked && specific ? [specific] : data.balances.filter((item) => item.recipientUserId === currentUserId);
-  const initialIndex = specific && !billLocked ? Math.max(choices.findIndex((item) => item.payerUserId === specific.payerUserId), 0) : 0;
+function PaymentModal({ data, currentUserId, specific, close, save }: { data: HouseholdData; currentUserId: string; specific: (Balance & { note?: string }) | null; close: () => void; save: (body: unknown) => Promise<void> }) {
+  const choices = data.balances.filter((item) => item.recipientUserId === currentUserId);
+  const initialIndex = specific ? Math.max(choices.findIndex((item) => item.payerUserId === specific.payerUserId), 0) : 0;
   const [index, setIndex] = useState(initialIndex);
   const balance = choices[index];
-  const maxCents = specific && billLocked ? specific.amountCents : balance?.amountCents ?? 0;
+  const maxCents = balance?.amountCents ?? 0;
   const [amount, setAmount] = useState(maxCents ? ((specific ? Math.min(specific.amountCents, maxCents) : maxCents) / 100).toFixed(2) : "");
   const [note, setNote] = useState(specific?.note ?? "");
   const [idempotencyKey] = useState(() => crypto.randomUUID());
@@ -658,18 +645,18 @@ function PaymentModal({ data, currentUserId, specific, close, save }: { data: Ho
   const overMax = amountCents > maxCents;
   const consequence = !amountCents ? null
     : overMax ? { tone: "part", text: `more than ${payerLabel} owes — max ${money(maxCents, data.household.currency)}` }
-    : amountCents === maxCents ? { tone: "full", text: billLocked ? `✓ clears ${payerLabel}’s share of ${specific?.billName ?? "this bill"}` : `✓ settles everything ${payerLabel} owes you` }
+    : amountCents === maxCents ? { tone: "full", text: `✓ settles everything ${payerLabel} owes you` }
     : { tone: "part", text: `leaves ${money(maxCents - amountCents, data.household.currency)} still open` };
   function pick(nextIndex: number) { setIndex(nextIndex); const next = choices[nextIndex]; setAmount(next ? (next.amountCents / 100).toFixed(2) : ""); }
   async function submit(event: React.FormEvent) {
     event.preventDefault(); if (!balance || !amountCents || overMax) return;
     setBusy(true); setError("");
-    try { await save({ idempotencyKey, billId: specific?.billId ?? null, payerUserId: balance.payerUserId, recipientUserId: balance.recipientUserId, amountCents, note, paidAt: new Date().toISOString() }); }
+    try { await save({ idempotencyKey, payerUserId: balance.payerUserId, recipientUserId: balance.recipientUserId, amountCents, note, paidAt: new Date().toISOString() }); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to confirm payment"); setBusy(false); }
   }
-  return <Modal title="Confirm payment received" subtitle={billLocked ? `Toward ${specific?.billName ?? "a bill"}` : "Money you received toward a balance"} close={close}>{balance ? <form className="pm" onSubmit={submit}>
+  return <Modal title="Confirm payment received" subtitle="Money you received toward your balance" close={close}>{balance ? <form className="pm" onSubmit={submit}>
     <span className="pm-lbl">WHO PAID YOU?</span>
-    <div className="pm-pills">{choices.map((item, itemIndex) => <button type="button" key={`${item.payerUserId}:${item.recipientUserId}`} className={`pm-pill${index === itemIndex ? " on" : ""}`} disabled={billLocked} onClick={() => pick(itemIndex)}><Avatar name={item.payerName ?? ""} /><small>{money(item.amountCents, data.household.currency)}</small></button>)}</div>
+    <div className="pm-pills">{choices.map((item, itemIndex) => <button type="button" key={`${item.payerUserId}:${item.recipientUserId}`} className={`pm-pill${index === itemIndex ? " on" : ""}`} onClick={() => pick(itemIndex)}><Avatar name={item.payerName ?? ""} /><small>{money(item.amountCents, data.household.currency)}</small></button>)}</div>
     <label className="pm-amount"><span>$</span><input type="number" inputMode="decimal" min="0.01" max={(maxCents / 100).toFixed(2)} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus /></label>
     <div className="pm-chips"><button type="button" className={chip === "all" ? "on" : ""} onClick={() => setAmount((maxCents / 100).toFixed(2))}>All {money(maxCents, data.household.currency)}</button><button type="button" className={chip === "half" ? "on" : ""} onClick={() => setAmount((halfCents / 100).toFixed(2))}>Half</button><button type="button" className={chip === "custom" ? "on" : ""} onClick={() => setAmount("")}>Custom</button></div>
     {consequence && <p className={`pm-conseq ${consequence.tone}`}>{consequence.text}</p>}
@@ -723,7 +710,7 @@ function InviteModal({ householdName, householdId, mutate, close }: { householdN
   </Modal>;
 }
 
-function BillDetailModal({ detail, userId, currency, claims, canClaim, onClaim, close, edit, remove, record, settle, closeWithoutPayment, addComment, uploadAttachment, removeAttachment, attachmentHref }: { detail: BillDetailData; userId: string; currency: string; claims: Claim[]; canClaim: (item: BillDetailData["obligations"][number]) => boolean; onClaim: (item: BillDetailData["obligations"][number]) => void; close: () => void; edit: () => void; remove: () => Promise<void>; record: (item: BillDetailData["obligations"][number]) => void; settle: (item: BillDetailData["obligations"][number]) => Promise<void>; closeWithoutPayment: () => Promise<void>; addComment: (body: string) => Promise<void>; uploadAttachment: (file: File) => Promise<void>; removeAttachment: (attachmentId: string) => Promise<void>; attachmentHref: (attachmentId: string) => string }) {
+function BillDetailModal({ detail, userId, currency, claims, canClaim, onClaim, close, edit, remove, addComment, uploadAttachment, removeAttachment, attachmentHref }: { detail: BillDetailData; userId: string; currency: string; claims: Claim[]; canClaim: (item: BillDetailData["obligations"][number]) => boolean; onClaim: (item: BillDetailData["obligations"][number]) => void; close: () => void; edit: () => void; remove: () => Promise<void>; addComment: (body: string) => Promise<void>; uploadAttachment: (file: File) => Promise<void>; removeAttachment: (attachmentId: string) => Promise<void>; attachmentHref: (attachmentId: string) => string }) {
   const [comment, setComment] = useState("");
   const [workError, setWorkError] = useState("");
   const [commentBusy, setCommentBusy] = useState(false);
@@ -744,28 +731,20 @@ function BillDetailModal({ detail, userId, currency, claims, canClaim, onClaim, 
     try { await uploadAttachment(file); } catch (cause) { setWorkError(cause instanceof Error ? cause.message : "The attachment could not be uploaded"); }
     finally { setUploadBusy(false); }
   }
-  const isSettled = detail.bill.status === "settled";
   const Glyph = CATEGORY_ICONS[detail.bill.category] ?? CATEGORY_ICONS.other;
-  const totalOutstanding = detail.obligations.reduce((sum, item) => sum + item.outstandingAmountCents, 0);
-  const settledCents = detail.bill.amountCents - totalOutstanding;
-  const myOutstanding = detail.obligations.filter((item) => item.debtorUserId === userId).reduce((sum, item) => sum + item.outstandingAmountCents, 0);
-  const owedToMe = detail.obligations.filter((item) => item.creditorUserId === userId).reduce((sum, item) => sum + item.outstandingAmountCents, 0);
-  const lastPaymentFor = (debtorUserId: string) => detail.payments.filter((payment) => payment.payerUserId === debtorUserId).sort((a, b) => +new Date(b.paidAt) - +new Date(a.paidAt))[0];
   return <Modal title={detail.bill.name} subtitle={`${detail.bill.periodLabel} · ${CATEGORY_LABELS[detail.bill.category] ?? CATEGORY_LABELS.other} · ${detail.bill.amountState}`} close={close}>
     <div className="bd">
-      <div className="bd-head"><span className="bd-glyph"><Glyph size={24} weight="duotone" className={`bill-cat cat-${detail.bill.category}`} /></span><span className={`bd-amt${isSettled ? " done" : ""}`}><b>{money(detail.bill.amountCents, currency)}</b><small>{isSettled ? "SETTLED ✓" : "OUTSTANDING"}</small></span></div>
-      {detail.bill.amountCents > 0 && <div className="bd-bar" aria-hidden><i className="done" style={{ width: `${Math.round((settledCents / detail.bill.amountCents) * 100)}%` }} /><i className="open" style={{ width: `${Math.round((totalOutstanding / detail.bill.amountCents) * 100)}%` }} /></div>}
-      <span className="bd-barlbl">{money(settledCents, currency)} settled · {money(totalOutstanding, currency)} to go{myOutstanding > 0 ? ` — you owe ${money(myOutstanding, currency)}` : owedToMe > 0 ? ` — ${money(owedToMe, currency)} owed to you` : ""}</span>
+      <div className="bd-head"><span className="bd-glyph"><Glyph size={24} weight="duotone" className={`bill-cat cat-${detail.bill.category}`} /></span><span className="bd-amt"><b>{money(detail.bill.amountCents, currency)}</b><small>TOTAL</small></span></div>
 
       <div className="bd-band">
         <div className="bd-bh"><strong>People</strong><small>{detail.contributions.map((item) => item.displayName).join(", ")} paid · {detail.bill.allocationMethod} split</small></div>
         {detail.contributions.map((item) => { const share = detail.allocations.find((allocation) => allocation.userId === item.userId); return <div className="bd-row" key={item.id}><Avatar name={item.displayName} /><span className="bd-t"><b>{item.userId === userId ? "You" : item.displayName}</b><small>paid {money(item.amountCents, currency)}{share ? ` · own share ${money(share.amountCents, currency)} covered` : ""}</small></span><span className="bd-ramt done">✓</span></div>; })}
-        {detail.obligations.map((item) => { const canConfirm = item.creditorUserId === userId && !isSettled; const paid = item.outstandingAmountCents === 0; const lastPay = paid ? lastPaymentFor(item.debtorUserId) : undefined; return <div className="bd-row" key={item.id}>
+        {detail.obligations.map((item) => <div className="bd-row" key={item.id}>
           <Avatar name={item.debtorName} />
-          <span className="bd-t"><b>{item.debtorUserId === userId ? "You" : item.debtorName}</b><small>{paid ? `owed ${money(item.originalAmountCents, currency)} · settled${lastPay ? ` ${new Date(lastPay.paidAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : ""}` : isSettled ? `owed ${money(item.originalAmountCents, currency)} · closed` : `owe${item.debtorUserId === userId ? "" : "s"} ${item.creditorUserId === userId ? "you" : item.creditorName} · ${money(item.paidAmountCents, currency)} paid of ${money(item.originalAmountCents, currency)}`}</small></span>
-          <span className={`bd-ramt${paid || isSettled ? " done" : ""}`}>{money(paid ? item.originalAmountCents : item.outstandingAmountCents, currency)}</span>
-          {paid ? <span className="bd-wait done">✓</span> : isSettled ? <span className="bd-wait done">closed</span> : canConfirm ? <span className="bd-acts"><button className="bd-ghost" onClick={() => record(item)}>Partial</button><button className="bd-confirm" onClick={() => void settle(item)}>Confirm all</button></span> : (() => { if (item.debtorUserId !== userId) return <span className="bd-wait">{`waiting on ${item.creditorName}`}</span>; const myPending = claims.find((claim) => claim.debtorUserId === userId && claim.creditorUserId === item.creditorUserId); if (myPending) return <span className="bd-wait">you said you paid · waiting on {item.creditorName}</span>; if (canClaim(item)) return <button className="bd-confirm" onClick={() => onClaim(item)}>I paid this</button>; return <span className="bd-wait" title={`Overall, ${item.creditorName} owes you more than this — nothing to claim`}>{`waiting on ${item.creditorName}`}</span>; })()}
-        </div>; })}
+          <span className="bd-t"><b>{item.debtorUserId === userId ? "You" : item.debtorName}</b><small>{item.debtorUserId === userId ? `your share — you owe ${item.creditorUserId === userId ? "yourself" : item.creditorName}` : `their share — owe${item.debtorUserId === userId ? "" : "s"} ${item.creditorUserId === userId ? "you" : item.creditorName}`}</small></span>
+          <span className="bd-ramt">{money(item.originalAmountCents, currency)}</span>
+          {item.debtorUserId === userId && canClaim(item) && !claims.some((claim) => claim.debtorUserId === userId && claim.creditorUserId === item.creditorUserId) ? <button className="bd-confirm" onClick={() => onClaim(item)}>I paid this</button> : null}
+        </div>)}
         {!detail.obligations.length && <p className="empty-copy">No repayments are required for this expense.</p>}
       </div>
 
@@ -780,7 +759,7 @@ function BillDetailModal({ detail, userId, currency, claims, canClaim, onClaim, 
       {workError && <p className="form-error">{workError}</p>}
       <button type="button" className="bd-disclose" onClick={() => setHistoryOpen((value) => !value)}>History ({detail.history.length}) <b>{historyOpen ? "Hide" : "Show"}</b></button>
       {historyOpen && <div className="bd-history">{detail.history.map((item) => <div key={item.id}><b>{item.changeType.replaceAll("_", " ")}</b><small>{item.changedBy} · {new Date(item.changedAt).toLocaleString()}</small></div>)}</div>}
-      <div className="bd-foot">{!isSettled && <button className="bd-txt" onClick={edit}>Edit terms</button>}{!isSettled && <button className="bd-txt" onClick={() => void closeWithoutPayment()}>Close without payment</button>}<button className="bd-txt danger" onClick={() => void remove()}>Remove</button><button className="bd-done" onClick={close}>Done</button></div>
+      <div className="bd-foot"><button className="bd-txt" onClick={edit}>Edit terms</button><button className="bd-txt danger" onClick={() => void remove()}>Remove</button><button className="bd-done" onClick={close}>Done</button></div>
     </div>
   </Modal>; }
 
