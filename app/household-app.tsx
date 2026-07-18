@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownLeft, ArrowRight, Bell, Check, Clock, Copy, Download, FileText, House, Menu, Paperclip, Plus, Settings, Trash2, UserPlus, Users, WalletCards, X } from "lucide-react";
+import { ArrowDownLeft, Bell, Check, Clock, Copy, Download, FileText, House, Menu, Paperclip, Plus, Settings, Trash2, UserPlus, Users, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Basket, Car, FileX, ForkKnife, HandCoins, House as HouseDuotone, Lightbulb as LightbulbDuotone, Package as PackageDuotone, Repeat as RepeatDuotone, SealCheck, Shapes as ShapesDuotone, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { BILL_CATEGORIES, CATEGORY_LABELS, type BillCategory } from "@/lib/categories";
@@ -199,7 +199,6 @@ export function HouseholdApp() {
     else setToast("Use your browser menu to install FairShare on this device.");
   }
 
-  const receivableBalances = useMemo(() => data?.balances.filter((item) => item.recipientUserId === session?.user.id) ?? [], [data, session]);
   const title = TAB_LABELS[tab];
 
   if (loading && !session) return <main className="loading-screen"><span className="brand-mark"><span className="roof" /><span className="door" /></span><p>Loading FairShare…</p></main>;
@@ -219,7 +218,7 @@ export function HouseholdApp() {
     <main className="main"><header className="topbar"><button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open menu"><Menu size={22} /></button><div className="top-actions"><button className="install-pill" onClick={install}><ArrowDownLeft size={16} /> Install app</button><button className="icon-button notification-button" onClick={openNotifications} aria-label="Notifications"><Bell size={20} />{notifications.some((item) => !item.readAt) && <span className="unread-dot" />}</button><a className="icon-button" href="/settings" aria-label="User settings"><Settings size={20} /></a><Avatar name={session?.user.displayName ?? ""} /></div>
       {notificationsOpen && <><button className="panel-scrim" aria-label="Close notifications" onClick={() => setNotificationsOpen(false)} /><div className="notification-panel"><div className="panel-title"><strong>Notifications</strong><span>{notifications.filter((item) => !item.readAt).length} new</span></div>{notifications.length ? notifications.slice(0, 8).map((item) => { const age = Date.now() - +new Date(item.createdAt); const when = age < 3_600_000 ? `${Math.max(Math.round(age / 60_000), 1)}m ago` : age < 86_400_000 ? `${Math.round(age / 3_600_000)}h ago` : new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }); return <button key={item.id} onClick={() => { setNotificationsOpen(false); const billId = item.targetPath ? new URLSearchParams(item.targetPath.split("?")[1] ?? "").get("bill") : null; if (billId) void openBill(billId); else navTo("friends"); }}>{item.type === "payment" ? <HandCoins size={18} weight="duotone" className="panel-glyph pay" /> : item.type === "balance" ? <Bell size={17} className="panel-glyph balance" /> : <FileText size={17} className="panel-glyph bill" />}<span><strong>{item.title}</strong><small>{item.body}</small></span><time>{when}</time></button>; }) : <p className="panel-empty">You’re all caught up.</p>}</div></>}
     </header>
-    <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1></div><p>{tab === "friends" ? "Balances by person, across every group you share." : tab === "groups" ? "Your households and where you stand in each." : "Recent bills, settlements, closures, and payments."}</p></div><div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div></div>
+    <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1></div><p>{tab === "friends" ? "Balances by person, across every group you share." : tab === "groups" ? "Your households and where you stand in each." : "Recent bills, settlements, closures, and payments."}</p></div><div className="heading-actions"><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div></div>
       {error && <div className="error-banner">{error}<button onClick={() => void refresh()}>Try again</button></div>}
       {loading || !allData.length ? <div className="wide-card loading-card">Refreshing ledger…</div>
         : tab === "friends" ? (friendId
@@ -347,9 +346,9 @@ function FriendDetail({ households, friendUserId, user, onBack, onBillDetail, on
       <div className="ledger-btnrow"><button className="ledger-btn solid" onClick={() => onConfirmClaim(home, balance, claim)}>Confirm received</button><button className="ledger-btn ghost danger" onClick={() => onDismissClaim(home, claim)}>I didn’t get this</button></div>
     </div>)}
     <div className="ledger-btnrow">
-      {incoming && <button className="ledger-btn solid" onClick={() => onSettle(incoming.home, incoming.balance)}>Settle up</button>}
+      {outgoing && !myClaim && <button className="ledger-btn solid" onClick={() => onClaim(outgoing.home, outgoing.balance)}>Settle up</button>}
+      {incoming && <button className={`ledger-btn ${outgoing && !myClaim ? "ghost" : "solid"}`} onClick={() => onSettle(incoming.home, incoming.balance)}>Confirm received</button>}
       {incoming && <button className="ledger-btn ghost" onClick={() => onNudge(incoming.home, incoming.balance)}>Remind</button>}
-      {outgoing && !myClaim && <button className={`ledger-btn ${incoming ? "ghost" : "solid"}`} onClick={() => onClaim(outgoing.home, outgoing.balance)}>I paid {firstName(friendName)}</button>}
       {myClaim && <button className="ledger-btn ghost" onClick={() => onClaim(myClaim!.home, myClaim!.balance, myClaim!.claim)}>Edit claim</button>}
       {myClaim && <button className="ledger-btn ghost danger" onClick={() => onCancelClaim(myClaim!.home, myClaim!.claim)}>Cancel claim</button>}
     </div>
@@ -617,7 +616,7 @@ function ClaimModal({ balance, existing, initialCents, currency, close, save }: 
     try { await save({ ...(existing ? {} : { creditorUserId: balance.recipientUserId }), amountCents, ...(note.trim() ? { note: note.trim() } : {}) }); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "The claim could not be sent"); setBusy(false); }
   }
-  return <Modal title={`Tell ${balance.recipientName ?? "them"} you paid`} subtitle="This doesn’t change any balances — they still confirm" close={close}><form className="pm" onSubmit={submit}>
+  return <Modal title={`Settle up with ${balance.recipientName ?? "them"}`} subtitle={`Enter what you sent — the balance changes when ${balance.recipientName ?? "they"} confirms it arrived`} close={close}><form className="pm" onSubmit={submit}>
     <label className="pm-amount"><span>$</span><input type="number" inputMode="decimal" min="0.01" max={(maxCents / 100).toFixed(2)} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus /></label>
     <div className="pm-chips"><button type="button" className={chip === "all" ? "on" : ""} onClick={() => setAmount((maxCents / 100).toFixed(2))}>All {money(maxCents, currency)}</button><button type="button" className={chip === "half" ? "on" : ""} onClick={() => setAmount((halfCents / 100).toFixed(2))}>Half</button><button type="button" className={chip === "custom" ? "on" : ""} onClick={() => setAmount("")}>Custom</button></div>
     {overMax && <p className="pm-conseq part">more than you owe — max {money(maxCents, currency)}</p>}
