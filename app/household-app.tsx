@@ -58,13 +58,15 @@ export function HouseholdApp() {
   const mergedActivity = useMemo(() => { if (!allData.length) return null; return { ...allData[0], bills: allData.flatMap((snapshot) => snapshot.bills), payments: allData.flatMap((snapshot) => snapshot.payments), closures: allData.flatMap((snapshot) => snapshot.closures) }; }, [allData]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = "dark";
+    const savedTheme = localStorage.getItem("fairshare-theme");
+    document.documentElement.dataset.theme = savedTheme && isThemeId(savedTheme) ? savedTheme : "light";
     Promise.all([fetch("/api/session", { cache: "no-store" }), fetch("/api/settings", { cache: "no-store" })]).then(async ([sessionResponse, settingsResponse]) => {
       if (sessionResponse.status === 401) { location.href = "/login"; return; }
       const sessionData = await sessionResponse.json() as SessionData;
       const settings = settingsResponse.ok ? await settingsResponse.json() : null;
       setSession(sessionData);
-      document.documentElement.dataset.theme = isThemeId(settings?.account?.themePreference) ? settings.account.themePreference : "dark";
+      const theme = isThemeId(settings?.account?.themePreference) ? settings.account.themePreference : "light";
+      document.documentElement.dataset.theme = theme; localStorage.setItem("fairshare-theme", theme);
       const savedHousehold = localStorage.getItem("fairshare-household");
       setHouseholdId(sessionData.households.some((item) => item.id === savedHousehold) ? savedHousehold! : sessionData.households[0]?.id ?? "");
       if (!sessionData.households.length) setLoading(false);
