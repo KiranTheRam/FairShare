@@ -222,7 +222,7 @@ export function HouseholdApp() {
       {error && <div className="error-banner">{error}<button onClick={() => void refresh()}>Try again</button></div>}
       {loading || !allData.length ? <div className="wide-card loading-card">Refreshing ledger…</div>
         : tab === "friends" ? (friendId
-          ? <FriendDetail households={allData} friendUserId={friendId} user={session!.user} onBack={() => setFriendId(null)} onBillDetail={openBill} onSettle={(home, balance) => { setHouseholdId(home); openPayment(balance); }} onNudge={(home, balance) => { setHouseholdId(home); void sendNudge(balance); }} onClaim={(home, balance, existing) => { setHouseholdId(home); openClaim(balance, existing); }} onCancelClaim={(home, claim) => { setHouseholdId(home); void cancelClaim(claim); }} onDismissClaim={(home, claim) => { setHouseholdId(home); void dismissClaim(claim); }} onConfirmClaim={(home, balance, claim) => { setHouseholdId(home); openPayment({ ...balance, amountCents: Math.min(claim.amountCents, balance.amountCents), note: claim.note ?? undefined }); }} />
+          ? <FriendDetail households={allData} friendUserId={friendId} user={session!.user} onBack={() => setFriendId(null)} onBillDetail={openBill} onNudge={(home, balance) => { setHouseholdId(home); void sendNudge(balance); }} onClaim={(home, balance, existing) => { setHouseholdId(home); openClaim(balance, existing); }} onCancelClaim={(home, claim) => { setHouseholdId(home); void cancelClaim(claim); }} onDismissClaim={(home, claim) => { setHouseholdId(home); void dismissClaim(claim); }} onConfirmClaim={(home, balance, claim) => { setHouseholdId(home); openPayment({ ...balance, amountCents: Math.min(claim.amountCents, balance.amountCents), note: claim.note ?? undefined }); }} />
           : <Friends households={allData} user={session!.user} onOpenFriend={setFriendId} onInvite={() => setModal("invite")} />)
         : tab === "groups" ? (groupId && snapshots[groupId]
           ? <div className="group-detail"><button className="ledger-back" onClick={() => setGroupId(null)}>‹ GROUPS</button><Bills data={snapshots[groupId]} user={session!.user} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /></div>
@@ -299,7 +299,7 @@ function Friends({ households, user, onOpenFriend, onInvite }: { households: Hou
   </div>;
 }
 
-function FriendDetail({ households, friendUserId, user, onBack, onBillDetail, onSettle, onNudge, onClaim, onCancelClaim, onDismissClaim, onConfirmClaim }: { households: HouseholdData[]; friendUserId: string; user: User; onBack: () => void; onBillDetail: (id: string) => void; onSettle: (home: string, balance: Balance) => void; onNudge: (home: string, balance: Balance) => void; onClaim: (home: string, balance: Balance, existing?: Claim) => void; onCancelClaim: (home: string, claim: Claim) => void; onDismissClaim: (home: string, claim: Claim) => void; onConfirmClaim: (home: string, balance: Balance, claim: Claim) => void }) {
+function FriendDetail({ households, friendUserId, user, onBack, onBillDetail, onNudge, onClaim, onCancelClaim, onDismissClaim, onConfirmClaim }: { households: HouseholdData[]; friendUserId: string; user: User; onBack: () => void; onBillDetail: (id: string) => void; onNudge: (home: string, balance: Balance) => void; onClaim: (home: string, balance: Balance, existing?: Claim) => void; onCancelClaim: (home: string, claim: Claim) => void; onDismissClaim: (home: string, claim: Claim) => void; onConfirmClaim: (home: string, balance: Balance, claim: Claim) => void }) {
   const shared = households.filter((snapshot) => snapshot.members.some((member) => member.id === friendUserId));
   if (!shared.length) return null;
   const currency = shared[0].household.currency;
@@ -345,13 +345,14 @@ function FriendDetail({ households, friendUserId, user, onBack, onBillDetail, on
       <p><b>{friendName} says they paid you {money(claim.amountCents, currency)}.</b>{claim.note ? ` “${claim.note}”` : ""}</p>
       <div className="ledger-btnrow"><button className="ledger-btn solid" onClick={() => onConfirmClaim(home, balance, claim)}>Confirm received</button><button className="ledger-btn ghost danger" onClick={() => onDismissClaim(home, claim)}>I didn’t get this</button></div>
     </div>)}
-    <div className="ledger-btnrow">
+    {(outgoing || incoming) && <div className="ledger-btnrow">
       {outgoing && !myClaim && <button className="ledger-btn solid" onClick={() => onClaim(outgoing.home, outgoing.balance)}>Settle up</button>}
-      {incoming && <button className={`ledger-btn ${outgoing && !myClaim ? "ghost" : "solid"}`} onClick={() => onSettle(incoming.home, incoming.balance)}>Confirm received</button>}
       {incoming && <button className="ledger-btn ghost" onClick={() => onNudge(incoming.home, incoming.balance)}>Remind</button>}
       {myClaim && <button className="ledger-btn ghost" onClick={() => onClaim(myClaim!.home, myClaim!.balance, myClaim!.claim)}>Edit claim</button>}
       {myClaim && <button className="ledger-btn ghost danger" onClick={() => onCancelClaim(myClaim!.home, myClaim!.claim)}>Cancel claim</button>}
-    </div>
+    </div>}
+    {incoming && !outgoing && !claimsToMe.length && <p className="ledger-note">You owe nothing here — when {friendName} marks a payment as sent, you’ll confirm it right on this page.</p>}
+    {!incoming && !outgoing && <p className="ledger-note">You’re all square with {friendName}. 🎉</p>}
     {groups.map((bucket) => <div key={`${bucket.groupName}:${bucket.month}`}>
       <div className="feed-month-head"><b>{manyGroups ? `${bucket.groupName} · ${bucket.month}` : bucket.month}</b><span className="num">{money(bucket.rows.reduce((sum, row) => sum + (row.kind === "bill" ? row.bill.amountCents : 0), 0), currency)}</span></div>
       {bucket.rows.map((row) => {
