@@ -27,7 +27,7 @@ export const billSchema = z.object({
   recurringTemplateId: uuid.nullable().optional(),
 });
 export const billUpdateSchema = billSchema.extend({ revision: z.number().int().positive() });
-export const paymentSchema = z.object({ idempotencyKey: uuid, billId: uuid.nullable().optional(), payerUserId: uuid, recipientUserId: uuid, amountCents: money.positive(), note: z.string().trim().max(500).optional(), paidAt: z.string().datetime().optional() }).refine((v) => v.payerUserId !== v.recipientUserId, "Payer and recipient must differ");
+export const paymentSchema = z.object({ idempotencyKey: uuid, payerUserId: uuid, recipientUserId: uuid, amountCents: money.positive(), note: z.string().trim().max(500).optional(), paidAt: z.string().datetime().optional() }).refine((v) => v.payerUserId !== v.recipientUserId, "Payer and recipient must differ");
 export const recurringSchema = z.object({ name: z.string().trim().min(2).max(160), category: z.enum(BILL_CATEGORIES).default("other"), expectedAmountCents: money.nullable(), cadence: z.enum(["weekly", "monthly", "quarterly", "yearly"]), nextOccurrence: z.string().datetime(), allocationMethod: z.enum(["equal", "percentage", "fixed"]), contributions: z.array(contributionSchema).min(1), allocations: z.array(allocationSchema).min(1), active: z.boolean().optional() }).superRefine((value, context) => {
   const amount = value.expectedAmountCents ?? value.allocations.reduce((sum, item) => sum + item.amountCents, 0);
   if (value.contributions.reduce((sum, item) => sum + item.amountCents, 0) !== amount) context.addIssue({ code: "custom", message: "Recurring contributions must equal the expected amount" });

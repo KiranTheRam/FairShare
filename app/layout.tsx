@@ -40,5 +40,5 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   await connection();
-  return <html lang="en" data-theme="dark" suppressHydrationWarning><body>{children}<ServiceWorkerRegistration /></body></html>;
+  return <html lang="en" data-theme="light" suppressHydrationWarning><body>{children}<ServiceWorkerRegistration /></body></html>;
 }

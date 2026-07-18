@@ -10,7 +10,7 @@ type SessionData = { user: { id: string; email: string; displayName: string; rol
 type NotificationPrefs = { billsEnabled: boolean; paymentsEnabled: boolean; balanceChangesEnabled: boolean };
 
 const initials = (name: string) => name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
-const applyTheme = (next: string) => { document.documentElement.dataset.theme = next; };
+const applyTheme = (next: string) => { document.documentElement.dataset.theme = next; localStorage.setItem("fairshare-theme", next); };
 
 export function SettingsClient() {
   const [session, setSession] = useState<SessionData | null>(null);
@@ -34,7 +34,7 @@ export function SettingsClient() {
       if (sessionResponse.status === 401) { location.href = "/login"; return; }
       setSession(await sessionResponse.json() as SessionData);
       const settings = settingsResponse.ok ? await settingsResponse.json() : null;
-      const savedTheme: ThemeId = isThemeId(settings?.account?.themePreference) ? settings.account.themePreference : "dark";
+      const savedTheme: ThemeId = isThemeId(settings?.account?.themePreference) ? settings.account.themePreference : "light";
       setTheme(savedTheme);
       applyTheme(savedTheme);
       if (settings?.notifications) setPreferences({ billsEnabled: settings.notifications.billsEnabled, paymentsEnabled: settings.notifications.paymentsEnabled, balanceChangesEnabled: settings.notifications.balanceChangesEnabled });

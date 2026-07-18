@@ -1,18 +1,18 @@
 "use client";
 
-import { ArrowDownLeft, ArrowRight, Bell, BellRing, Check, Copy, Download, FileText, LayoutDashboard, Menu, Paperclip, Plus, ReceiptText, Settings, Trash2, UserPlus, WalletCards, X } from "lucide-react";
+import { ArrowDownLeft, Bell, Check, Clock, Copy, Download, FileText, House, Menu, Paperclip, Plus, Settings, Trash2, UserPlus, Users, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Basket, Car, FileX, ForkKnife, HandCoins, House as HouseDuotone, Lightbulb as LightbulbDuotone, Package as PackageDuotone, Repeat as RepeatDuotone, SealCheck, Shapes as ShapesDuotone, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { BILL_CATEGORIES, CATEGORY_LABELS, type BillCategory } from "@/lib/categories";
 import { isThemeId } from "@/lib/themes";
 
-type Tab = "overview" | "bills" | "balances" | "activity";
-const TAB_LABELS: Record<Tab, string> = { overview: "Overview", bills: "Bills", balances: "Settle up", activity: "Activity" };
+type Tab = "friends" | "groups" | "activity";
+const TAB_LABELS: Record<Tab, string> = { friends: "Friends", groups: "Groups", activity: "Activity" };
 type ModalName = "bill" | "edit" | "payment" | "recurring-edit" | "detail" | "invite" | "claim" | null;
 type User = { id: string; email: string; displayName: string; role: "member" | "administrator" };
 type HouseholdListItem = { id: string; name: string; currency: string };
 type Member = { id: string; displayName: string; email: string };
-type Bill = { id: string; name: string; category: BillCategory; amountCents: number; periodLabel: string; dueDate?: string | null; amountState: "estimated" | "final"; status: "draft" | "open" | "settled" | "void"; createdByName?: string; createdAt: string };
+type Bill = { id: string; name: string; category: BillCategory; amountCents: number; periodLabel: string; dueDate?: string | null; amountState: "estimated" | "final"; status: "draft" | "open" | "settled" | "void"; createdByName?: string; payerUserId?: string | null; payerName?: string | null; obligations?: Array<{ debtorUserId: string; creditorUserId: string; amountCents: number }>; createdAt: string };
 type BalanceComponent = { billId: string; billName: string; category: BillCategory; amountCents: number };
 type Balance = { payerUserId: string; recipientUserId: string; payerName?: string; recipientName?: string; amountCents: number; components?: BalanceComponent[] };
 type Payment = { id: string; billId?: string | null; payerUserId: string; recipientUserId: string; payerName?: string; recipientName?: string; actorName?: string; billName?: string | null; amountCents: number; note?: string | null; paidAt: string };
@@ -33,8 +33,10 @@ const initials = (name: string) => name.split(/\s+/).map((part) => part[0]).join
 export function HouseholdApp() {
   const [session, setSession] = useState<SessionData | null>(null);
   const [householdId, setHouseholdId] = useState("");
-  const [data, setData] = useState<HouseholdData | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [snapshots, setSnapshots] = useState<Record<string, HouseholdData>>({});
+  const [tab, setTab] = useState<Tab>("friends");
+  const [friendId, setFriendId] = useState<string | null>(null);
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalName>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -45,20 +47,26 @@ export function HouseholdApp() {
   const [error, setError] = useState("");
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
   const [billDetail, setBillDetail] = useState<BillDetailData | null>(null);
-  const [paymentContext, setPaymentContext] = useState<(Balance & { billId?: string | null; billName?: string; note?: string }) | null>(null);
+  const [paymentContext, setPaymentContext] = useState<(Balance & { note?: string }) | null>(null);
   const [selectedRecurring, setSelectedRecurring] = useState<Recurring | null>(null);
   const [claimContext, setClaimContext] = useState<{ balance: Balance; existing?: Claim; initialCents?: number } | null>(null);
-  const [billsMonth, setBillsMonth] = useState<string | null>(null);
-  function navTo(next: Tab) { if (next === "bills") setBillsMonth(null); setTab(next); }
+  const data = householdId ? snapshots[householdId] ?? null : null;
+  const allData = useMemo(() => (session?.households ?? []).map((item) => snapshots[item.id]).filter(Boolean) as HouseholdData[], [session, snapshots]);
+  // Which household a bill belongs to, so taps work from cross-household feeds.
+  const billHomes = useMemo(() => { const map = new Map<string, string>(); for (const snapshot of allData) for (const bill of snapshot.bills) map.set(bill.id, snapshot.household.id); return map; }, [allData]);
+  function navTo(next: Tab) { setFriendId(null); setGroupId(null); setTab(next); }
+  const mergedActivity = useMemo(() => { if (!allData.length) return null; return { ...allData[0], bills: allData.flatMap((snapshot) => snapshot.bills), payments: allData.flatMap((snapshot) => snapshot.payments), closures: allData.flatMap((snapshot) => snapshot.closures) }; }, [allData]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = "dark";
+    const savedTheme = localStorage.getItem("fairshare-theme");
+    document.documentElement.dataset.theme = savedTheme && isThemeId(savedTheme) ? savedTheme : "light";
     Promise.all([fetch("/api/session", { cache: "no-store" }), fetch("/api/settings", { cache: "no-store" })]).then(async ([sessionResponse, settingsResponse]) => {
       if (sessionResponse.status === 401) { location.href = "/login"; return; }
       const sessionData = await sessionResponse.json() as SessionData;
       const settings = settingsResponse.ok ? await settingsResponse.json() : null;
       setSession(sessionData);
-      document.documentElement.dataset.theme = isThemeId(settings?.account?.themePreference) ? settings.account.themePreference : "dark";
+      const theme = isThemeId(settings?.account?.themePreference) ? settings.account.themePreference : "light";
+      document.documentElement.dataset.theme = theme; localStorage.setItem("fairshare-theme", theme);
       const savedHousehold = localStorage.getItem("fairshare-household");
       setHouseholdId(sessionData.households.some((item) => item.id === savedHousehold) ? savedHousehold! : sessionData.households[0]?.id ?? "");
       if (!sessionData.households.length) setLoading(false);
@@ -76,9 +84,9 @@ export function HouseholdApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [householdId]);
 
-  // refresh is intentionally keyed only by the selected Household.
+  // refresh loads every household in the account; keyed by session arrival.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (householdId) void refresh(); }, [householdId]);
+  useEffect(() => { if (session?.households.length && householdId) void refresh(); }, [session, householdId === ""]);
   // Other members' changes (payments, bills) never reach an already-open tab on
   // their own, so refetch silently when this tab regains focus and poll gently
   // while it stays visible.
@@ -94,14 +102,18 @@ export function HouseholdApp() {
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => { setToast(""); setAddAnother(false); }, 4000); return () => clearTimeout(timer); }, [toast]);
 
   async function refresh(options?: { silent?: boolean }) {
+    if (!session) return;
     const silent = options?.silent ?? false;
     if (!silent) { setLoading(true); setError(""); }
     try {
-      const [response, recurringResponse] = await Promise.all([fetch(`/api/households/${householdId}`, { cache: "no-store" }), fetch(`/api/households/${householdId}/recurring`, { cache: "no-store" })]);
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "Unable to load household");
-      const recurringBody = recurringResponse.ok ? await recurringResponse.json() : { recurring: [] };
-      setData({ ...body, recurring: recurringBody.recurring }); localStorage.setItem("fairshare-household", householdId);
+      const entries = await Promise.all(session.households.map(async (item) => {
+        const [response, recurringResponse] = await Promise.all([fetch(`/api/households/${item.id}`, { cache: "no-store" }), fetch(`/api/households/${item.id}/recurring`, { cache: "no-store" })]);
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error ?? "Unable to load household");
+        const recurringBody = recurringResponse.ok ? await recurringResponse.json() : { recurring: [] };
+        return [item.id, { ...body, recurring: recurringBody.recurring }] as const;
+      }));
+      setSnapshots(Object.fromEntries(entries)); localStorage.setItem("fairshare-household", householdId);
       fetch("/api/notifications", { cache: "no-store" }).then(async (list) => { if (list.ok) setNotifications((await list.json()).notifications as NotificationItem[]); }).catch(() => {});
     } catch (cause) { if (!silent) setError(cause instanceof Error ? cause.message : "Unable to load household"); }
     finally { if (!silent) setLoading(false); }
@@ -129,13 +141,15 @@ export function HouseholdApp() {
   }
 
   async function openBill(billId: string) {
-    const response = await fetch(`/api/households/${householdId}/bills/${billId}`, { cache: "no-store" });
+    const home = billHomes.get(billId) ?? householdId;
+    if (home !== householdId) setHouseholdId(home);
+    const response = await fetch(`/api/households/${home}/bills/${billId}`, { cache: "no-store" });
     const body = await response.json();
     if (!response.ok) { setToast(body.error ?? "Bill detail could not be loaded"); return; }
     setBillDetail(body); setModal("detail");
   }
 
-  function openPayment(context: (Balance & { billId?: string | null; billName?: string; note?: string }) | null = null) { setPaymentContext(context); setModal("payment"); }
+  function openPayment(context: (Balance & { note?: string }) | null = null) { setPaymentContext(context); setModal("payment"); }
 
   async function addComment(billId: string, body: string) {
     await mutate(`/api/households/${householdId}/bills/${billId}/comments`, "POST", { body });
@@ -187,10 +201,7 @@ export function HouseholdApp() {
     else setToast("Use your browser menu to install FairShare on this device.");
   }
 
-  const myBalances = useMemo(() => data?.balances.filter((item) => item.payerUserId === session?.user.id || item.recipientUserId === session?.user.id) ?? [], [data, session]);
-  const receivableBalances = useMemo(() => data?.balances.filter((item) => item.recipientUserId === session?.user.id) ?? [], [data, session]);
-  const net = myBalances.reduce((sum, item) => sum + (item.recipientUserId === session?.user.id ? item.amountCents : -item.amountCents), 0);
-  const title = tab === "overview" ? `Hello, ${session?.user.displayName.split(" ")[0] ?? "there"}` : TAB_LABELS[tab];
+  const title = TAB_LABELS[tab];
 
   if (loading && !session) return <main className="loading-screen"><span className="brand-mark"><span className="roof" /><span className="door" /></span><p>Loading FairShare…</p></main>;
   if (session && !session.households.length) return <EmptyAccount user={session.user} onLogout={logout} />;
@@ -202,25 +213,33 @@ export function HouseholdApp() {
         <select aria-label="Choose household" value={householdId} onChange={(e) => setHouseholdId(e.target.value)}>{session?.households.map((household) => <option key={household.id} value={household.id}>{household.name}</option>)}</select>
       </label>
       <button className="side-invite" onClick={() => { setModal("invite"); setSidebarOpen(false); }}><UserPlus size={15} /> Invite a roommate</button>
-      <nav className="side-nav">{(["overview", "bills", "balances", "activity"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => { navTo(item); setSidebarOpen(false); }}>{item === "overview" ? <LayoutDashboard size={19} /> : item === "bills" ? <ReceiptText size={19} /> : item === "balances" ? <WalletCards size={19} /> : <FileText size={19} />}<span>{TAB_LABELS[item]}</span></button>)}</nav>
+      <nav className="side-nav">{(["friends", "groups", "activity"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => { navTo(item); setSidebarOpen(false); }}>{item === "friends" ? <Users size={19} /> : item === "groups" ? <House size={19} /> : <Clock size={19} />}<span>{TAB_LABELS[item]}</span></button>)}</nav>
       <div className="side-bottom"><a className="side-link" href="/settings"><Settings size={19} /> User settings</a><a className="profile-card" href="/settings"><Avatar name={session?.user.displayName ?? ""} /><span><strong>{session?.user.displayName}</strong><small>{session?.user.email}</small></span></a></div>
     </aside>
     {sidebarOpen && <button className="scrim" aria-label="Close menu" onClick={() => setSidebarOpen(false)} />}
     <main className="main"><header className="topbar"><button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open menu"><Menu size={22} /></button><div className="top-actions"><button className="install-pill" onClick={install}><ArrowDownLeft size={16} /> Install app</button><button className="icon-button notification-button" onClick={openNotifications} aria-label="Notifications"><Bell size={20} />{notifications.some((item) => !item.readAt) && <span className="unread-dot" />}</button><a className="icon-button" href="/settings" aria-label="User settings"><Settings size={20} /></a><Avatar name={session?.user.displayName ?? ""} /></div>
-      {notificationsOpen && <><button className="panel-scrim" aria-label="Close notifications" onClick={() => setNotificationsOpen(false)} /><div className="notification-panel"><div className="panel-title"><strong>Notifications</strong><span>{notifications.filter((item) => !item.readAt).length} new</span></div>{notifications.length ? notifications.slice(0, 8).map((item) => { const age = Date.now() - +new Date(item.createdAt); const when = age < 3_600_000 ? `${Math.max(Math.round(age / 60_000), 1)}m ago` : age < 86_400_000 ? `${Math.round(age / 3_600_000)}h ago` : new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }); return <button key={item.id} onClick={() => { setNotificationsOpen(false); const billId = item.targetPath ? new URLSearchParams(item.targetPath.split("?")[1] ?? "").get("bill") : null; if (billId) void openBill(billId); else setTab("overview"); }}>{item.type === "payment" ? <HandCoins size={18} weight="duotone" className="panel-glyph pay" /> : item.type === "balance" ? <Bell size={17} className="panel-glyph balance" /> : <ReceiptText size={17} className="panel-glyph bill" />}<span><strong>{item.title}</strong><small>{item.body}</small></span><time>{when}</time></button>; }) : <p className="panel-empty">You’re all caught up.</p>}</div></>}
+      {notificationsOpen && <><button className="panel-scrim" aria-label="Close notifications" onClick={() => setNotificationsOpen(false)} /><div className="notification-panel"><div className="panel-title"><strong>Notifications</strong><span>{notifications.filter((item) => !item.readAt).length} new</span></div>{notifications.length ? notifications.slice(0, 8).map((item) => { const age = Date.now() - +new Date(item.createdAt); const when = age < 3_600_000 ? `${Math.max(Math.round(age / 60_000), 1)}m ago` : age < 86_400_000 ? `${Math.round(age / 3_600_000)}h ago` : new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }); return <button key={item.id} onClick={() => { setNotificationsOpen(false); const billId = item.targetPath ? new URLSearchParams(item.targetPath.split("?")[1] ?? "").get("bill") : null; if (billId) void openBill(billId); else navTo("friends"); }}>{item.type === "payment" ? <HandCoins size={18} weight="duotone" className="panel-glyph pay" /> : item.type === "balance" ? <Bell size={17} className="panel-glyph balance" /> : <FileText size={17} className="panel-glyph bill" />}<span><strong>{item.title}</strong><small>{item.body}</small></span><time>{when}</time></button>; }) : <p className="panel-empty">You’re all caught up.</p>}</div></>}
     </header>
-    <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1></div><p>{tab === "overview" ? "Here’s where everyone stands today." : tab === "bills" ? "Outstanding, settled, and scheduled household expenses." : tab === "balances" ? "Everyone’s position and the fewest payments to clear it." : "Recent bills, settlements, closures, and payments."}</p></div><div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div></div>
+    <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1></div><p>{tab === "friends" ? "Balances by person, across every group you share." : tab === "groups" ? "Your households and where you stand in each." : "Recent bills, settlements, closures, and payments."}</p></div><div className="heading-actions"><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div></div>
       {error && <div className="error-banner">{error}<button onClick={() => void refresh()}>Try again</button></div>}
-      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onPayment={(context) => openPayment(context ?? null)} onNudge={sendNudge} onClaim={(balance) => openClaim(balance)} onEditClaim={(balance, existing) => openClaim(balance, existing)} onCancelClaim={cancelClaim} onDismissClaim={dismissClaim} onBillDetail={openBill} onOpenBills={() => { setBillsMonth(new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })); setTab("bills"); }} /> : tab === "bills" ? <Bills data={data!} user={session!.user} initialMonth={billsMonth} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <SettleUp data={data!} user={session!.user} onPayment={(context) => openPayment(context ?? null)} /> : <Activity data={data!} user={session!.user} householdId={householdId} onBillDetail={openBill} />}
+      {loading || !allData.length ? <div className="wide-card loading-card">Refreshing ledger…</div>
+        : tab === "friends" ? (friendId
+          ? <FriendDetail households={allData} friendUserId={friendId} user={session!.user} onBack={() => setFriendId(null)} onBillDetail={openBill} onNudge={(home, balance) => { setHouseholdId(home); void sendNudge(balance); }} onClaim={(home, balance, existing) => { setHouseholdId(home); openClaim(balance, existing); }} onCancelClaim={(home, claim) => { setHouseholdId(home); void cancelClaim(claim); }} onDismissClaim={(home, claim) => { setHouseholdId(home); void dismissClaim(claim); }} onConfirmClaim={(home, balance, claim) => { setHouseholdId(home); openPayment({ ...balance, amountCents: Math.min(claim.amountCents, balance.amountCents), note: claim.note ?? undefined }); }} />
+          : <Friends households={allData} user={session!.user} onOpenFriend={setFriendId} onInvite={() => setModal("invite")} />)
+        : tab === "groups" ? (groupId && snapshots[groupId]
+          ? <div className="group-detail"><button className="ledger-back" onClick={() => setGroupId(null)}>‹ GROUPS</button><Bills data={snapshots[groupId]} user={session!.user} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /></div>
+          : <Groups households={allData} user={session!.user} onOpenGroup={(id) => { setGroupId(id); setHouseholdId(id); }} />)
+        : <Activity data={mergedActivity!} user={session!.user} householdId={householdId} onBillDetail={openBill} />}
     </div></main>
-    <nav className="bottom-nav">{(["overview", "bills"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={navTo} />)}<button className="fab" onClick={() => setModal("bill")}><Plus size={24} /></button>{(["balances", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={navTo} />)}</nav>
+    <nav className="bottom-nav">{(["friends", "groups", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={navTo} />)}</nav>
+    <button className="fab" onClick={() => setModal("bill")} aria-label="Add bill"><Plus size={24} /></button>
     {modal === "bill" && data && <BillModal data={data} currentUserId={session?.user.id} close={() => setModal(null)} save={async (body, recurring) => { await mutate(`/api/households/${householdId}/bills`, "POST", { ...(body as object), ...(recurring ? { recurring } : {}) }); setModal(null); setToast(recurring ? "Bill and recurring schedule added." : "Bill added to the household ledger."); setAddAnother(true); await refresh(); }} />}
     {modal === "edit" && data && billDetail && <BillModal data={data} currentUserId={session?.user.id} initial={billDetail} close={() => setModal("detail")} save={async (body) => { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "PATCH", body); setModal(null); setToast("Bill updated and balances recalculated."); await refresh(); }} />}
     {modal === "claim" && data && claimContext && <ClaimModal balance={claimContext.balance} existing={claimContext.existing} initialCents={claimContext.initialCents} currency={data.household.currency} close={() => { setModal(null); setClaimContext(null); }} save={async (body) => { if (claimContext.existing) await mutate(`/api/households/${householdId}/claims/${claimContext.existing.id}`, "PATCH", body); else await mutate(`/api/households/${householdId}/claims`, "POST", body); setModal(null); setClaimContext(null); setToast(claimContext.existing ? "Claim updated." : `${claimContext.balance.recipientName} will be asked to confirm.`); await refresh(); }} />}
     {modal === "payment" && data && <PaymentModal data={data} currentUserId={session?.user.id ?? ""} specific={paymentContext} close={() => { setModal(null); setPaymentContext(null); }} save={async (body) => { await mutate(`/api/households/${householdId}/payments`, "POST", body); setModal(null); setPaymentContext(null); setToast("Payment confirmed."); await refresh(); }} />}
     {modal === "recurring-edit" && data && selectedRecurring && <RecurringModal data={data} initial={selectedRecurring} close={() => setModal(null)} save={async (body) => { await mutate(`/api/households/${householdId}/recurring/${selectedRecurring.id}`, "PATCH", body); setModal(null); setSelectedRecurring(null); setToast("Future recurring bills will use the updated schedule."); await refresh(); }} remove={async () => { if (!confirm("Delete this schedule? Bills it already created are untouched.")) return; try { await mutate(`/api/households/${householdId}/recurring/${selectedRecurring.id}`, "DELETE"); setModal(null); setSelectedRecurring(null); setToast("Schedule deleted."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "The schedule could not be deleted"); } }} />}
     {modal === "invite" && data && <InviteModal householdName={data.household.name} householdId={householdId} mutate={mutate} close={() => setModal(null)} />}
-    {modal === "detail" && billDetail && <BillDetailModal detail={billDetail} userId={session?.user.id ?? ""} currency={data?.household.currency ?? "USD"} claims={data?.claims ?? []} canClaim={(item) => Boolean(data?.balances.some((candidate) => candidate.payerUserId === item.debtorUserId && candidate.recipientUserId === item.creditorUserId && candidate.amountCents > 0))} onClaim={(item) => { const balance = data?.balances.find((candidate) => candidate.payerUserId === item.debtorUserId && candidate.recipientUserId === item.creditorUserId); if (balance) { setModal(null); openClaim(balance, undefined, item.outstandingAmountCents); } }} addComment={(body) => addComment(billDetail.bill.id, body)} uploadAttachment={(file) => uploadAttachment(billDetail.bill.id, file)} removeAttachment={(attachmentId) => removeAttachment(billDetail.bill.id, attachmentId)} attachmentHref={(attachmentId) => `/api/households/${householdId}/bills/${billDetail.bill.id}/attachments/${attachmentId}`} close={() => setModal(null)} edit={() => setModal("edit")} remove={async () => { if (!confirm("Remove this bill and recalculate Household balances? The audit record is retained.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "DELETE"); setModal(null); setToast("Bill removed and balances recalculated."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Bill could not be removed"); } }} record={(item) => openPayment({ billId: billDetail.bill.id, billName: billDetail.bill.name, payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, payerName: item.debtorName, recipientName: item.creditorName, amountCents: item.outstandingAmountCents })} settle={async (item) => { if (!confirm(`Confirm receipt of ${money(item.outstandingAmountCents, data?.household.currency ?? "USD")} from ${item.debtorName} and mark this share settled?`)) return; try { await mutate(`/api/households/${householdId}/payments`, "POST", { idempotencyKey: crypto.randomUUID(), billId: billDetail.bill.id, payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, amountCents: item.outstandingAmountCents, note: "Marked settled", paidAt: new Date().toISOString() }); setToast(`${item.debtorName}’s share was settled.`); await refresh(); await openBill(billDetail.bill.id); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Share could not be settled"); } }} closeWithoutPayment={async () => { if (!confirm("Close this entire expense without recording payments? Use this only when settlement was recorded separately.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}/close`, "POST"); setModal(null); setToast("Expense closed without recording another payment."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Expense could not be closed"); } }} />}
+    {modal === "detail" && billDetail && <BillDetailModal detail={billDetail} userId={session?.user.id ?? ""} currency={data?.household.currency ?? "USD"} claims={data?.claims ?? []} canClaim={(item) => Boolean(data?.balances.some((candidate) => candidate.payerUserId === item.debtorUserId && candidate.recipientUserId === item.creditorUserId && candidate.amountCents > 0))} onClaim={(item) => { const balance = data?.balances.find((candidate) => candidate.payerUserId === item.debtorUserId && candidate.recipientUserId === item.creditorUserId); if (balance) { setModal(null); openClaim(balance, undefined, item.outstandingAmountCents); } }} addComment={(body) => addComment(billDetail.bill.id, body)} uploadAttachment={(file) => uploadAttachment(billDetail.bill.id, file)} removeAttachment={(attachmentId) => removeAttachment(billDetail.bill.id, attachmentId)} attachmentHref={(attachmentId) => `/api/households/${householdId}/bills/${billDetail.bill.id}/attachments/${attachmentId}`} close={() => setModal(null)} edit={() => setModal("edit")} remove={async () => { if (!confirm("Remove this bill and recalculate Household balances? The audit record is retained.")) return; try { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "DELETE"); setModal(null); setToast("Bill removed and balances recalculated."); await refresh(); } catch (cause) { setToast(cause instanceof Error ? cause.message : "Bill could not be removed"); } }} />}
     {toast && <div className="toast"><span><Check size={16} /></span>{toast}{addAnother && <button className="toast-action" onClick={() => { setToast(""); setAddAnother(false); setModal("bill"); }}>Add another</button>}</div>}
   </div>;
 }
@@ -237,176 +256,218 @@ const CATEGORY_ICONS = {
   other: ShapesDuotone,
 } satisfies Record<BillCategory, PhosphorIcon>;
 
-function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "overview" ? LayoutDashboard : item === "bills" ? ReceiptText : item === "balances" ? WalletCards : FileText; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{item === "overview" ? "Home" : TAB_LABELS[item]}</small></button>; }
+function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "friends" ? Users : item === "groups" ? House : Clock; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{TAB_LABELS[item]}</small></button>; }
 
-function BalanceCard({ item, currency, mine, direction, pendingClaim, onOpen, onConfirm, onNudge, onClaim, onEditClaim, onCancelClaim, onBillDetail }: { item: Balance; currency: string; mine: boolean; direction: "in" | "out" | "other"; pendingClaim?: Claim; onOpen: () => void; onConfirm: (item: Balance) => void; onNudge: (item: Balance) => void; onClaim: (item: Balance) => void; onEditClaim: (item: Balance, claim: Claim) => void; onCancelClaim: (claim: Claim) => void; onBillDetail: (id: string) => void }) {
-  const components = item.components ?? [];
-  const title = direction === "in" ? item.payerName : direction === "out" ? `You owe ${item.recipientName}` : `${item.payerName} → ${item.recipientName}`;
-  return <section className={`glance-card glance-tappable${mine ? "" : " glance-other"}`} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" && event.target === event.currentTarget) onOpen(); }}>
-    <div className="glance-card-top">{direction === "other" ? <div className="avatar-pair"><Avatar name={item.payerName ?? ""} /><Avatar name={item.recipientName ?? ""} /></div> : <Avatar name={(direction === "in" ? item.payerName : item.recipientName) ?? ""} />}<span className="glance-who"><strong>{title}</strong><small>{direction === "out" ? (pendingClaim ? "You said you paid — waiting on them" : "Awaiting their confirmation") : `${components.length || "No"} bill${components.length === 1 ? "" : "s"} open`}</small></span><span className="glance-amt">{money(item.amountCents, currency)}</span></div>
-    {components.length > 0 && <div className="glance-breakdown">{components.map((component) => <i key={component.billId} className={`glance-seg category-${component.category}`} style={{ width: `${Math.max((component.amountCents / item.amountCents) * 100, 3)}%` }} title={`${component.billName} — ${money(component.amountCents, currency)}`} />)}</div>}
-    {components.length > 0 && <div className="glance-keys">{components.map((component) => <button key={component.billId} onClick={(event) => { event.stopPropagation(); onBillDetail(component.billId); }}><i className={`category-${component.category}`} />{component.billName} <b>{money(component.amountCents, currency)}</b></button>)}</div>}
-    {direction === "in" && <div className="glance-actions"><button className="glance-confirm" onClick={(event) => { event.stopPropagation(); onConfirm(item); }}>Confirm payment</button><button className="glance-remind" onClick={(event) => { event.stopPropagation(); void onNudge(item); }}><BellRing size={14} /> Remind</button></div>}
-    {direction === "out" && !pendingClaim && <div className="glance-actions"><button className="glance-confirm" onClick={(event) => { event.stopPropagation(); onClaim(item); }}>I paid this</button><span className="glance-claimhint">then {item.recipientName} confirms</span></div>}
-    {direction === "out" && pendingClaim && <div className="glance-actions"><span className="glance-pendtag"><i />you said you paid {money(pendingClaim.amountCents, currency)} · waiting on {item.recipientName}</span><button className="glance-remind" onClick={(event) => { event.stopPropagation(); onEditClaim(item, pendingClaim); }}>Edit</button><button className="glance-remind danger" onClick={(event) => { event.stopPropagation(); void onCancelClaim(pendingClaim); }}>Cancel</button></div>}
-  </section>;
+type FriendAgg = { userId: string; name: string; net: number; openBills: number; groups: string[] };
+
+function friendAggregates(households: HouseholdData[], userId: string) {
+  const map = new Map<string, FriendAgg>();
+  for (const snapshot of households) {
+    for (const member of snapshot.members) {
+      if (member.id === userId) continue;
+      const entry = map.get(member.id) ?? { userId: member.id, name: member.displayName, net: 0, openBills: 0, groups: [] };
+      if (!entry.groups.includes(snapshot.household.name)) entry.groups.push(snapshot.household.name);
+      map.set(member.id, entry);
+    }
+    for (const balance of snapshot.balances) {
+      const other = balance.recipientUserId === userId ? balance.payerUserId : balance.payerUserId === userId ? balance.recipientUserId : null;
+      if (!other) continue;
+      const entry = map.get(other);
+      if (!entry) continue;
+      entry.net += balance.recipientUserId === userId ? balance.amountCents : -balance.amountCents;
+      entry.openBills += (balance.components ?? []).length;
+    }
+  }
+  return [...map.values()].sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
 }
 
-function Overview({ data, user, net, onPayment, onNudge, onClaim, onEditClaim, onCancelClaim, onDismissClaim, onBillDetail, onOpenBills }: { data: HouseholdData; user: User; net: number; onPayment: (context?: Balance & { note?: string }) => void; onNudge: (item: Balance) => void; onClaim: (item: Balance) => void; onEditClaim: (item: Balance, claim: Claim) => void; onCancelClaim: (claim: Claim) => void; onDismissClaim: (claim: Claim) => void; onBillDetail: (id: string) => void; onOpenBills: () => void }) {
-  const currency = data.household.currency;
-  const owedToMe = data.balances.filter((item) => item.recipientUserId === user.id);
-  const iOwe = data.balances.filter((item) => item.payerUserId === user.id);
-  const others = data.balances.filter((item) => item.payerUserId !== user.id && item.recipientUserId !== user.id);
-  const openBillCount = data.bills.filter((bill) => bill.status === "open").length;
-  const debtorNames = owedToMe.map((item) => item.payerName).filter(Boolean);
-  const [dayAgo] = useState(() => Date.now() - 86_400_000);
-  const recentReceipts = data.payments.filter((payment) => payment.recipientUserId === user.id && new Date(payment.paidAt).getTime() > dayAgo);
-  const receiptTotal = recentReceipts.reduce((sum, payment) => sum + payment.amountCents, 0);
-  const latestReceipt = recentReceipts[0];
-  const claimsForMe = data.claims.filter((claim) => claim.creditorUserId === user.id);
-  const claimFor = (recipientUserId: string) => data.claims.find((claim) => claim.debtorUserId === user.id && claim.creditorUserId === recipientUserId);
-  return <div className="glance-grid">
-    <div className="glance-col">
-      <section className="glance-hero"><span className="glance-k">{net < 0 ? "You owe" : "You are owed"}</span><strong className="glance-big">{money(Math.abs(net), currency)}</strong>
-        <span className="glance-sub">{debtorNames.length ? `from ${debtorNames.join(" and ")} · ` : ""}{openBillCount} open bill{openBillCount === 1 ? "" : "s"}</span>
-        {receiptTotal > 0 && <span className="glance-delta">▼ {money(receiptTotal, currency)} less than yesterday{latestReceipt ? ` — ${latestReceipt.payerName} settled ${latestReceipt.billName ?? "a payment"}` : ""}</span>}
-      </section>
-      
-    </div>
-    <div className="glance-col">
-      {claimsForMe.map((claim) => <section className="glance-claim" key={claim.id}>
-        <div className="glance-claim-top"><Avatar name={claim.debtorName ?? ""} /><span className="glance-who"><strong>{claim.debtorName} says they paid you</strong><small>{claim.note ? `“${claim.note}” · ` : ""}{new Date(claim.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</small></span><span className="glance-amt claim">{money(claim.amountCents, currency)}</span></div>
-        <div className="glance-actions"><button className="glance-confirm" onClick={() => { const balance = data.balances.find((item) => item.payerUserId === claim.debtorUserId && item.recipientUserId === user.id); if (balance) onPayment({ ...balance, amountCents: Math.min(claim.amountCents, balance.amountCents), note: claim.note ?? undefined }); }}>Confirm received</button><button className="glance-remind danger" onClick={() => void onDismissClaim(claim)}>I didn’t get this</button></div>
-      </section>)}
-      {data.balances.length > 0 && <div className="glance-zone">
-        {owedToMe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="in" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onClaim={onClaim} onEditClaim={onEditClaim} onCancelClaim={onCancelClaim} onBillDetail={onBillDetail} />)}
-        {iOwe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="out" pendingClaim={claimFor(item.recipientUserId)} onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onClaim={onClaim} onEditClaim={onEditClaim} onCancelClaim={onCancelClaim} onBillDetail={onBillDetail} />)}
-        {others.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine={false} direction="other" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onClaim={onClaim} onEditClaim={onEditClaim} onCancelClaim={onCancelClaim} onBillDetail={onBillDetail} />)}
-      </div>}
-      {!data.balances.length && <section className="glance-card glance-settled"><Check size={26} /><strong>Everyone is settled up</strong><small>New bills will appear here as balances open.</small></section>}
+function Friends({ households, user, onOpenFriend, onInvite }: { households: HouseholdData[]; user: User; onOpenFriend: (id: string) => void; onInvite: () => void }) {
+  const currency = households[0].household.currency;
+  const friends = friendAggregates(households, user.id);
+  const net = friends.reduce((sum, friend) => sum + friend.net, 0);
+  return <div className="ledger-view">
+    <p className="ledger-k">{net > 0 ? "You are owed" : net < 0 ? "You owe" : "All settled"}</p>
+    {net !== 0 && <p className={`ledger-big ${net > 0 ? "pos" : "neg"}`}>{money(Math.abs(net), currency)}</p>}
+    <hr className="ledger-rule" />
+    <div className="ledger-list">
+      {friends.map((friend) => <button className="fr-row" key={friend.userId} onClick={() => onOpenFriend(friend.userId)}>
+        <span className="fr-avatar">{initials(friend.name)}</span>
+        <span className="fr-who"><b>{friend.name}</b><small>{friend.groups.join(" · ")}{friend.openBills ? ` · ${friend.openBills} open bill${friend.openBills === 1 ? "" : "s"}` : ""}</small></span>
+        {friend.net === 0 ? <span className="fr-amt zero"><b>settled</b><small>✓</small></span>
+          : <span className={`fr-amt ${friend.net > 0 ? "pos" : "neg"}`}><b>{money(Math.abs(friend.net), currency)}</b><small>{friend.net > 0 ? "owes you" : "you owe"}</small></span>}
+      </button>)}
+      <button className="fr-row invite" onClick={onInvite}><span className="fr-avatar dashed">+</span><span className="fr-who"><b>Invite a roommate</b><small>they join one of your groups</small></span></button>
     </div>
   </div>;
 }
 
-function BillLine({ bill, currency, personal, onClick }: { bill: Bill; currency: string; personal?: { text: string; tone: "owe" | "in" }; onClick: () => void }) {
-  const Icon = CATEGORY_ICONS[bill.category] ?? CATEGORY_ICONS.other;
-  const settled = bill.status === "settled";
-  return <button className={`bill-line${settled ? " done" : " open"}`} onClick={onClick}>
-    <Icon size={19} weight="duotone" className={`bill-cat cat-${bill.category}`} aria-hidden="true" />
-    <span className="bill-line-text"><strong>{bill.name}</strong><small>{bill.periodLabel} · {CATEGORY_LABELS[bill.category] ?? CATEGORY_LABELS.other} · {bill.amountState}{personal ? <> · <em className={`bill-personal ${personal.tone}`}>{personal.text}</em></> : null}</small></span>
-    <span className="bill-line-amt"><b>{money(bill.amountCents, currency)}</b><small>{settled ? "SETTLED ✓" : "OUTSTANDING"}</small></span>
-  </button>;
+function FriendDetail({ households, friendUserId, user, onBack, onBillDetail, onNudge, onClaim, onCancelClaim, onDismissClaim, onConfirmClaim }: { households: HouseholdData[]; friendUserId: string; user: User; onBack: () => void; onBillDetail: (id: string) => void; onNudge: (home: string, balance: Balance) => void; onClaim: (home: string, balance: Balance, existing?: Claim) => void; onCancelClaim: (home: string, claim: Claim) => void; onDismissClaim: (home: string, claim: Claim) => void; onConfirmClaim: (home: string, balance: Balance, claim: Claim) => void }) {
+  const shared = households.filter((snapshot) => snapshot.members.some((member) => member.id === friendUserId));
+  if (!shared.length) return null;
+  const currency = shared[0].household.currency;
+  const friendName = shared[0].members.find((member) => member.id === friendUserId)?.displayName ?? "them";
+  let net = 0;
+  const pairs: Array<{ home: string; balance: Balance; direction: "in" | "out" }> = [];
+  for (const snapshot of shared) for (const balance of snapshot.balances) {
+    if (balance.recipientUserId === user.id && balance.payerUserId === friendUserId) { net += balance.amountCents; pairs.push({ home: snapshot.household.id, balance, direction: "in" }); }
+    if (balance.payerUserId === user.id && balance.recipientUserId === friendUserId) { net -= balance.amountCents; pairs.push({ home: snapshot.household.id, balance, direction: "out" }); }
+  }
+  const incoming = pairs.find((pair) => pair.direction === "in");
+  const outgoing = pairs.find((pair) => pair.direction === "out");
+  const claimsToMe: Array<{ home: string; claim: Claim; balance: Balance }> = [];
+  let myClaim: { home: string; claim: Claim; balance: Balance } | undefined;
+  for (const snapshot of shared) for (const claim of snapshot.claims) {
+    if (claim.creditorUserId === user.id && claim.debtorUserId === friendUserId) { const balance = snapshot.balances.find((item) => item.payerUserId === friendUserId && item.recipientUserId === user.id); if (balance) claimsToMe.push({ home: snapshot.household.id, claim, balance }); }
+    if (claim.debtorUserId === user.id && claim.creditorUserId === friendUserId && !myClaim) { const balance = snapshot.balances.find((item) => item.payerUserId === user.id && item.recipientUserId === friendUserId); if (balance) myClaim = { home: snapshot.household.id, claim, balance }; }
+  }
+  type Row = { key: string; when: number; month: string; groupName: string; kind: "bill"; bill: Bill } | { key: string; when: number; month: string; groupName: string; kind: "payment"; payment: Payment };
+  const monthOf = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const rows: Row[] = [];
+  const manyGroups = shared.length > 1;
+  for (const snapshot of shared) {
+    const groupName = snapshot.household.name;
+    for (const bill of snapshot.bills) if (bill.payerUserId === user.id || bill.payerUserId === friendUserId) rows.push({ key: `bill:${bill.id}`, when: +new Date(bill.dueDate ?? bill.createdAt), month: bill.periodLabel, groupName, kind: "bill", bill });
+    for (const payment of snapshot.payments) if ((payment.payerUserId === user.id && payment.recipientUserId === friendUserId) || (payment.payerUserId === friendUserId && payment.recipientUserId === user.id)) rows.push({ key: `payment:${payment.id}`, when: +new Date(payment.paidAt), month: monthOf(payment.paidAt), groupName, kind: "payment", payment });
+  }
+  rows.sort((a, b) => b.when - a.when);
+  const groups: Array<{ month: string; groupName: string; rows: Row[] }> = [];
+  for (const row of rows) { const bucket = groups.find((entry) => entry.month === row.month && entry.groupName === row.groupName); if (bucket) bucket.rows.push(row); else groups.push({ month: row.month, groupName: row.groupName, rows: [row] }); }
+  const shareFor = (snapshotBill: Bill) => {
+    const lent = (snapshotBill.obligations ?? []).filter((item) => item.creditorUserId === user.id && item.debtorUserId === friendUserId).reduce((sum, item) => sum + item.amountCents, 0);
+    const borrowed = (snapshotBill.obligations ?? []).filter((item) => item.debtorUserId === user.id && item.creditorUserId === friendUserId).reduce((sum, item) => sum + item.amountCents, 0);
+    if (borrowed > 0) return { label: "you borrowed", amount: money(borrowed, currency), tone: "borrowed" };
+    if (lent > 0) return { label: "you lent", amount: money(lent, currency), tone: "lent" };
+    return { label: "no share", amount: "—", tone: "done" };
+  };
+  const firstName = (name?: string | null) => (name ?? "").split(/\s+/)[0] || "Someone";
+  return <div className="ledger-view">
+    <button className="ledger-back" onClick={onBack}>‹ FRIENDS</button>
+    <div className="fr-hero"><span className="fr-avatar big">{initials(friendName)}</span><span className="fr-hero-text"><b>{friendName}</b><small className={net > 0 ? "pos" : net < 0 ? "neg" : ""}>{net > 0 ? `owes you ${money(net, currency)}` : net < 0 ? `you owe ${money(-net, currency)}` : "settled up"}</small></span></div>
+    {claimsToMe.map(({ home, claim, balance }) => <div className="ledger-claim" key={claim.id}>
+      <p><b>{friendName} says they paid you {money(claim.amountCents, currency)}.</b>{claim.note ? ` “${claim.note}”` : ""}</p>
+      <div className="ledger-btnrow"><button className="ledger-btn solid" onClick={() => onConfirmClaim(home, balance, claim)}>Confirm received</button><button className="ledger-btn ghost danger" onClick={() => onDismissClaim(home, claim)}>I didn’t get this</button></div>
+    </div>)}
+    {myClaim && <span className="ledger-pend"><i />you sent {money(myClaim.claim.amountCents, currency)} · waiting on {firstName(friendName)}</span>}
+    {(outgoing || incoming) && <div className="ledger-btnrow">
+      {outgoing && !myClaim && <button className="ledger-btn solid" onClick={() => onClaim(outgoing.home, outgoing.balance)}>Pay</button>}
+      {incoming && <button className="ledger-btn ghost" onClick={() => onNudge(incoming.home, incoming.balance)}>Remind</button>}
+      {myClaim && <button className="ledger-btn ghost" onClick={() => onClaim(myClaim!.home, myClaim!.balance, myClaim!.claim)}>Edit</button>}
+      {myClaim && <button className="ledger-btn ghost danger" onClick={() => onCancelClaim(myClaim!.home, myClaim!.claim)}>Cancel</button>}
+    </div>}
+    {incoming && !outgoing && !claimsToMe.length && <p className="ledger-note">You owe nothing here — when {friendName} marks a payment as sent, you’ll confirm it right on this page.</p>}
+    {!incoming && !outgoing && <p className="ledger-note">You’re all square with {friendName}. 🎉</p>}
+    {groups.map((bucket) => <div key={`${bucket.groupName}:${bucket.month}`}>
+      <div className="feed-month-head"><b>{manyGroups ? `${bucket.groupName} · ${bucket.month}` : bucket.month}</b><span className="num">{money(bucket.rows.reduce((sum, row) => sum + (row.kind === "bill" ? row.bill.amountCents : 0), 0), currency)}</span></div>
+      {bucket.rows.map((row) => {
+        if (row.kind === "bill") {
+          const bill = row.bill;
+          const Icon = CATEGORY_ICONS[bill.category] ?? CATEGORY_ICONS.other;
+          const side = shareFor(bill);
+          const date = new Date(bill.dueDate ?? bill.createdAt);
+          return <button className="feed-row" key={row.key} onClick={() => onBillDetail(bill.id)}>
+            <span className="feed-date"><small>{date.toLocaleDateString(undefined, { month: "short" })}</small><b>{date.getDate()}</b></span>
+            <Icon size={19} weight="duotone" className={`feed-glyph bill-cat cat-${bill.category}`} aria-hidden="true" />
+            <span className="feed-main"><b>{bill.name}</b><small>{bill.payerUserId === user.id ? "You" : firstName(bill.payerName ?? bill.createdByName)} paid {money(bill.amountCents, currency)}</small></span>
+            <span className={`feed-side ${side.tone}`}><small>{side.label}</small><b>{side.amount}</b></span>
+          </button>;
+        }
+        const payment = row.payment;
+        const date = new Date(payment.paidAt);
+        return <button className="feed-row pay" key={row.key} disabled={!payment.billId} onClick={() => payment.billId && onBillDetail(payment.billId)}>
+          <span className="feed-date"><small>{date.toLocaleDateString(undefined, { month: "short" })}</small><b>{date.getDate()}</b></span>
+          <HandCoins size={19} weight="duotone" className="feed-glyph glyph-pay" aria-hidden="true" />
+          <span className="feed-main"><b>{payment.payerUserId === user.id ? "You" : firstName(payment.payerName)} paid {payment.recipientUserId === user.id ? "you" : firstName(payment.recipientName)}</b><small>{payment.billName ? `toward ${payment.billName}` : "payment"} · confirmed</small></span>
+          <span className="feed-side pay"><b>{payment.recipientUserId === user.id ? "+" : ""}{money(payment.amountCents, currency)}</b></span>
+        </button>;
+      })}
+    </div>)}
+    {!rows.length && <p className="empty-copy">Nothing shared with {friendName} yet.</p>}
+  </div>;
 }
 
-function Bills({ data, user, initialMonth, onBillDetail, onEditRecurring }: { data: HouseholdData; user: User; initialMonth?: string | null; onBillDetail: (id: string) => void; onEditRecurring: (item: Recurring) => void }) {
+function Groups({ households, user, onOpenGroup }: { households: HouseholdData[]; user: User; onOpenGroup: (id: string) => void }) {
+  return <div className="ledger-view">
+    <div className="ledger-list">
+      {households.map((snapshot) => {
+        const currency = snapshot.household.currency;
+        const net = snapshot.balances.reduce((sum, item) => sum + (item.recipientUserId === user.id ? item.amountCents : 0) - (item.payerUserId === user.id ? item.amountCents : 0), 0);
+        return <button className="fr-row" key={snapshot.household.id} onClick={() => onOpenGroup(snapshot.household.id)}>
+          <span className="gr-avatar">{initials(snapshot.household.name)}</span>
+          <span className="fr-who"><b>{snapshot.household.name}</b><small>{snapshot.members.length} {snapshot.members.length === 1 ? "person" : "people"} · {snapshot.bills.filter((bill) => bill.status === "open").length} open bills</small></span>
+          {net === 0 ? <span className="fr-amt zero"><b>settled</b><small>✓</small></span>
+            : <span className={`fr-amt ${net > 0 ? "pos" : "neg"}`}><b>{money(Math.abs(net), currency)}</b><small>{net > 0 ? "you are owed" : "you owe"}</small></span>}
+        </button>;
+      })}
+    </div>
+    <p className="ledger-note">Starting a new group is an admin task for now — ask your administrator.</p>
+  </div>;
+}
+
+function Bills({ data, user, onBillDetail, onEditRecurring }: { data: HouseholdData; user: User; onBillDetail: (id: string) => void; onEditRecurring: (item: Recurring) => void }) {
   const currency = data.household.currency;
-  const [openMonth, setOpenMonth] = useState<string | null>(initialMonth ?? null);
-  const recorded = data.bills.reduce((sum, bill) => sum + bill.amountCents, 0);
-  const openBalances = data.balances.reduce((sum, item) => sum + item.amountCents, 0);
-  const openCount = data.bills.filter((bill) => bill.status === "open").length;
-  const categoryTotals = useMemo(() => {
-    const totals = new Map<BillCategory, number>();
-    for (const bill of data.bills) totals.set(bill.category, (totals.get(bill.category) ?? 0) + bill.amountCents);
-    return [...totals].sort((a, b) => b[1] - a[1]);
-  }, [data.bills]);
-  const spendTotal = categoryTotals.reduce((sum, [, amount]) => sum + amount, 0);
+  const [schedOpen, setSchedOpen] = useState(false);
   const schedules = [...data.recurring].sort((a, b) => +new Date(a.nextOccurrence) - +new Date(b.nextOccurrence));
   const monthlyEquivalent = Math.round(schedules.reduce((sum, item) => { if (!item.active || item.expectedAmountCents === null) return sum; const factor = item.cadence === "weekly" ? 52 / 12 : item.cadence === "monthly" ? 1 : item.cadence === "quarterly" ? 1 / 3 : 1 / 12; return sum + item.expectedAmountCents * factor; }, 0));
-  // Per-bill personal amounts, derived from the same balance components the homepage uses.
-  const youOweByBill = new Map<string, number>();
-  const owedToYouByBill = new Map<string, number>();
-  for (const balance of data.balances) for (const component of balance.components ?? []) {
-    if (balance.payerUserId === user.id) youOweByBill.set(component.billId, (youOweByBill.get(component.billId) ?? 0) + component.amountCents);
-    if (balance.recipientUserId === user.id) owedToYouByBill.set(component.billId, (owedToYouByBill.get(component.billId) ?? 0) + component.amountCents);
-  }
-  const months = useMemo(() => {
-    const groups = new Map<string, Bill[]>();
-    for (const bill of data.bills) { const key = bill.periodLabel; const group = groups.get(key); if (group) group.push(bill); else groups.set(key, [bill]); }
-    return [...groups.entries()].map(([label, bills]) => ({ label, bills, latest: Math.max(...bills.map((bill) => +new Date(bill.createdAt))), parsed: +new Date(label) }))
-      .sort((a, b) => (Number.isNaN(b.parsed) || Number.isNaN(a.parsed) ? b.latest - a.latest : b.parsed - a.parsed));
-  }, [data.bills]);
-  const monthOwe = (bills: Bill[]) => bills.reduce((sum, bill) => sum + (youOweByBill.get(bill.id) ?? 0), 0);
-  const monthOwed = (bills: Bill[]) => bills.reduce((sum, bill) => sum + (owedToYouByBill.get(bill.id) ?? 0), 0);
-  const personalFor = (bill: Bill) => { const owe = youOweByBill.get(bill.id) ?? 0; const owed = owedToYouByBill.get(bill.id) ?? 0; return owe > 0 ? { text: `you still owe ${money(owe, currency)}`, tone: "owe" as const } : owed > 0 ? { text: `owed to you ${money(owed, currency)}`, tone: "in" as const } : undefined; };
-
-  const current = openMonth ? months.find((month) => month.label === openMonth) : undefined;
-  if (current) {
-    const open = current.bills.filter((bill) => bill.status === "open");
-    const settled = current.bills.filter((bill) => bill.status === "settled");
-    const owe = monthOwe(current.bills); const owed = monthOwed(current.bills);
-    return <section className="page-content bills-view">
-      <button className="bills-back" onClick={() => setOpenMonth(null)}>‹ Months <span>·</span> <b>{current.label}</b></button>
-      <p className="bills-monthline">{current.bills.length} bill{current.bills.length === 1 ? "" : "s"} · {money(current.bills.reduce((sum, bill) => sum + bill.amountCents, 0), currency)} recorded{owe > 0 ? <> · <b>you still owe {money(owe, currency)}</b></> : null}{owed > 0 ? ` · owed to you ${money(owed, currency)}` : ""}</p>
-      <div className="bills-band">
-        <div className="bills-band-head"><strong>Outstanding</strong><small>{open.length} bill{open.length === 1 ? "" : "s"}</small><span className="bills-sum open">{money(open.reduce((sum, bill) => sum + bill.amountCents, 0), currency)}</span></div>
-        {open.map((bill) => <BillLine key={bill.id} bill={bill} currency={currency} personal={personalFor(bill)} onClick={() => onBillDetail(bill.id)} />)}
-        {!open.length && <p className="empty-copy">Nothing outstanding in {current.label}.</p>}
-      </div>
-      <div className="bills-band quiet">
-        <div className="bills-band-head"><strong>Settled</strong><small>{settled.length} bill{settled.length === 1 ? "" : "s"}</small><span className="bills-sum done">{money(settled.reduce((sum, bill) => sum + bill.amountCents, 0), currency)}</span></div>
-        {settled.map((bill) => <BillLine key={bill.id} bill={bill} currency={currency} onClick={() => onBillDetail(bill.id)} />)}
-        {!settled.length && <p className="empty-copy">No settled expenses yet.</p>}
-      </div>
-    </section>;
-  }
-
-  return <section className="page-content bills-view">
-    <div className="bills-stats">
-      <div><small>RECORDED</small><b>{money(recorded, currency)}</b></div>
-      <div className="accent"><small>OPEN BALANCES</small><b>{money(openBalances, currency)}</b></div>
-      <div><small>BILLS</small><b>{openCount} / {data.bills.length}</b></div>
-    </div>
-    {categoryTotals.length > 0 && <div className="category-breakdown"><p className="eyebrow">SPENDING BY CATEGORY</p>{categoryTotals.map(([category, amountCents]) => <div className="category-line" key={category}><span>{CATEGORY_LABELS[category] ?? CATEGORY_LABELS.other}</span><span className="category-bar"><span style={{ width: `${spendTotal ? Math.max(3, Math.round(amountCents / spendTotal * 100)) : 0}%` }} /></span><strong>{money(amountCents, currency)}</strong></div>)}</div>}
-    <span className="bills-months-lbl">MONTHS</span>
-    {months.map((month) => { const owe = monthOwe(month.bills); const owed = monthOwed(month.bills); const allSettled = month.bills.every((bill) => bill.status === "settled");
-      return <button className={`bills-mrow${allSettled ? " quiet" : ""}`} key={month.label} onClick={() => setOpenMonth(month.label)}>
-        <span className="bills-mrow-t"><b>{month.label}</b><small>{month.bills.length} bill{month.bills.length === 1 ? "" : "s"} · {money(month.bills.reduce((sum, bill) => sum + bill.amountCents, 0), currency)} recorded</small></span>
-        {allSettled ? <span className="bills-mrow-done">✓ settled</span> : <span className="bills-mrow-owe">{owe > 0 ? <><b>{money(owe, currency)}</b><small>YOU STILL OWE</small></> : <span className="bills-mrow-zero">nothing from you</span>}{owed > 0 && <span className="bills-mrow-in">owed to you {money(owed, currency)}</span>}</span>}
-        <span className="bills-mrow-chev">›</span>
-      </button>; })}
-    {!months.length && <p className="empty-copy">No bills yet. Add the first shared expense.</p>}
-    <div className="bills-band quiet">
-      <div className="bills-band-head"><strong>Scheduled</strong><small>{schedules.length} recurring · tap to edit</small>{monthlyEquivalent > 0 && <span className="bills-sum sched">≈ {money(monthlyEquivalent, currency)} / mo</span>}</div>
-      {schedules.map((item) => { const date = new Date(item.nextOccurrence); return <button className="bill-line sched" key={item.id} onClick={() => onEditRecurring(item)}>
-        <span className="bill-when">{date.toLocaleDateString(undefined, { month: "short" }).toUpperCase()} {date.getDate()}</span>
-        <span className="bill-line-text"><strong>{item.name}</strong><small>{item.cadence} · splits {item.templateConfig.allocations.length} way{item.templateConfig.allocations.length === 1 ? "" : "s"}</small></span>
-        <span className="bill-line-amt"><b>{item.expectedAmountCents === null ? "varies" : money(item.expectedAmountCents, currency)}</b><small>{item.active ? "RENEWS" : "PAUSED"}</small></span>
-      </button>; })}
-      {!schedules.length && <p className="empty-copy">No scheduled bills yet. Enable recurrence while adding an expense.</p>}
-    </div>
-  </section>;
-}
-
-
-function SettleUp({ data, user, onPayment }: { data: HouseholdData; user: User; onPayment: (context?: Balance) => void }) {
-  const currency = data.household.currency;
-  const nets = data.members.map((member) => ({ member, net: data.balances.reduce((sum, item) => sum + (item.recipientUserId === member.id ? item.amountCents : 0) - (item.payerUserId === member.id ? item.amountCents : 0), 0) }));
-  const maxNet = Math.max(...nets.map((entry) => Math.abs(entry.net)), 1);
-  const planSubtitle = (item: Balance) => {
-    const direct = data.balances.find((candidate) => candidate.payerUserId === item.payerUserId && candidate.recipientUserId === item.recipientUserId);
-    const names = (direct?.components ?? []).map((component) => component.billName);
-    if (!names.length) return "clears combined balances";
-    return `clears ${names.slice(0, 2).join(" + ")}${names.length > 2 ? ` + ${names.length - 2} more` : ""}`;
+  type FeedItem = { key: string; when: number; month: string; kind: "bill"; bill: Bill } | { key: string; when: number; month: string; kind: "payment"; payment: Payment };
+  const monthOf = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const items: FeedItem[] = [
+    ...data.bills.map((bill) => ({ key: `bill:${bill.id}`, when: +new Date(bill.dueDate ?? bill.createdAt), month: bill.periodLabel, kind: "bill" as const, bill })),
+    ...data.payments.map((payment) => ({ key: `payment:${payment.id}`, when: +new Date(payment.paidAt), month: monthOf(payment.paidAt), kind: "payment" as const, payment })),
+  ].sort((a, b) => b.when - a.when);
+  const groups: Array<{ month: string; items: FeedItem[] }> = [];
+  for (const item of items) { const group = groups.find((entry) => entry.month === item.month); if (group) group.items.push(item); else groups.push({ month: item.month, items: [item] }); }
+  const monthMeta = (group: { month: string; items: FeedItem[] }) => {
+    const monthBills = group.items.filter((item) => item.kind === "bill").map((item) => (item as { bill: Bill }).bill);
+    if (!monthBills.length) return { label: "payments" };
+    return { label: `${money(monthBills.reduce((sum, bill) => sum + bill.amountCents, 0), currency)} recorded` };
   };
-  return <section className="page-content settle-view">
-    <div className="settle-toolbar"><p>{data.simplifiedBalances.length ? `${data.simplifiedBalances.length} payment${data.simplifiedBalances.length === 1 ? "" : "s"} would zero the household.` : "Everyone is settled up."}</p></div>
-    <div className="settle-nets">{nets.map(({ member, net: amount }) => <div key={member.id} className={`settle-net${amount > 0 ? " pos" : amount < 0 ? " neg" : ""}`}><Avatar name={member.displayName} /><small>{member.id === user.id ? "You" : member.displayName}</small><b>{amount > 0 ? "+" : amount < 0 ? "−" : ""}{money(Math.abs(amount), currency)}</b><span className="settle-netbar"><i style={{ width: `${Math.round((Math.abs(amount) / maxNet) * 100)}%` }} /></span></div>)}</div>
-    <div className="settle-plan">
-      <div className="bills-band-head"><strong>The plan</strong><small>fewest payments to clear every balance</small></div>
-      <p className="settle-plan-note">Suggestions only — the ledger never changes until money is confirmed received.</p>
-      {data.simplifiedBalances.map((item) => <div className="settle-prow" key={`${item.payerUserId}:${item.recipientUserId}`}>
-        <span className="avatar-pair"><Avatar name={item.payerName ?? ""} /><Avatar name={item.recipientName ?? ""} /></span>
-        <span className="settle-prow-text"><b>{item.payerUserId === user.id ? `You pay ${item.recipientName}` : item.recipientUserId === user.id ? `${item.payerName} pays you` : `${item.payerName} pays ${item.recipientName}`}</b><small>{planSubtitle(item)}</small></span>
-        <span className="settle-prow-amt">{money(item.amountCents, currency)}</span>
-        {item.recipientUserId === user.id ? <button className="settle-confirm" onClick={() => onPayment(item)}>Got it? Confirm</button> : <span className="settle-wait">{`waiting on ${item.recipientName}`}</span>}
-      </div>)}
-      {!data.simplifiedBalances.length && <p className="empty-copy">Nothing to settle — new bills will build a plan here.</p>}
-    </div>
-    <div className="settle-direct">
-      <div className="bills-band-head"><strong>Direct balances</strong><small>the record behind the plan · {data.balances.length} open</small></div>
-      {data.balances.map((item) => <div className="settle-drow" key={`${item.payerUserId}:${item.recipientUserId}`}><span className="settle-prow-text"><b>{item.payerUserId === user.id ? `You owe ${item.recipientName}` : item.recipientUserId === user.id ? `${item.payerName} owes you` : `${item.payerName} owes ${item.recipientName}`}</b><small>{(item.components ?? []).map((component) => component.billName).join(" + ") || "open balance"}</small></span><span className="settle-prow-amt">{money(item.amountCents, currency)}</span></div>)}
-      {!data.balances.length && <p className="empty-copy">Everyone is settled up.</p>}
-    </div>
+  // Splitwise-style permanent history: a bill row always shows your original share.
+  const sideFor = (bill: Bill) => {
+    const lent = (bill.obligations ?? []).filter((item) => item.creditorUserId === user.id).reduce((sum, item) => sum + item.amountCents, 0);
+    const borrowed = (bill.obligations ?? []).filter((item) => item.debtorUserId === user.id).reduce((sum, item) => sum + item.amountCents, 0);
+    if (borrowed > 0) return { label: "you borrowed", amount: money(borrowed, currency), tone: "borrowed" };
+    if (lent > 0) return { label: "you lent", amount: money(lent, currency), tone: "lent" };
+    return { label: "not involved", amount: "—", tone: "done" };
+  };
+  const firstName = (name?: string | null) => (name ?? "").split(/\s+/)[0] || "Someone";
+  return <section className="page-content feed-view">
+    <button className="feed-sched" onClick={() => setSchedOpen((value) => !value)} aria-expanded={schedOpen}>
+      <RepeatDuotone size={17} weight="duotone" />
+      <span className="feed-sched-text"><b>Scheduled</b><small>{schedules.length ? `${schedules.length} recurring${monthlyEquivalent > 0 ? ` · ≈ ${money(monthlyEquivalent, currency)} / mo` : ""}` : "no recurring bills yet"}</small></span>
+      <span className="feed-chev">{schedOpen ? "⌄" : "›"}</span>
+    </button>
+    {schedOpen && schedules.map((item) => { const date = new Date(item.nextOccurrence); return <button className="bill-line sched" key={item.id} onClick={() => onEditRecurring(item)}>
+      <span className="bill-when">{date.toLocaleDateString(undefined, { month: "short" }).toUpperCase()} {date.getDate()}</span>
+      <span className="bill-line-text"><strong>{item.name}</strong><small>{item.cadence} · splits {item.templateConfig.allocations.length} way{item.templateConfig.allocations.length === 1 ? "" : "s"}</small></span>
+      <span className="bill-line-amt"><b>{item.expectedAmountCents === null ? "varies" : money(item.expectedAmountCents, currency)}</b><small>{item.active ? "RENEWS" : "PAUSED"}</small></span>
+    </button>; })}
+    {schedOpen && !schedules.length && <p className="empty-copy">Enable “repeats” while adding a bill to schedule it.</p>}
+    {groups.map((group) => { const meta = monthMeta(group); return <div className="feed-month" key={group.month}>
+      <div className="feed-month-head"><b>{group.month}</b><span>{meta.label}</span></div>
+      {group.items.map((item) => {
+        if (item.kind === "bill") {
+          const bill = item.bill;
+          const Icon = CATEGORY_ICONS[bill.category] ?? CATEGORY_ICONS.other;
+          const side = sideFor(bill);
+          const date = new Date(bill.dueDate ?? bill.createdAt);
+          return <button className="feed-row" key={item.key} onClick={() => onBillDetail(bill.id)}>
+            <span className="feed-date"><small>{date.toLocaleDateString(undefined, { month: "short" })}</small><b>{date.getDate()}</b></span>
+            <Icon size={19} weight="duotone" className={`feed-glyph bill-cat cat-${bill.category}`} aria-hidden="true" />
+            <span className="feed-main"><b>{bill.name}</b><small>{bill.payerUserId === user.id ? "You" : firstName(bill.payerName ?? bill.createdByName)} paid {money(bill.amountCents, currency)}{bill.amountState === "estimated" ? " · estimated" : ""}</small></span>
+            <span className={`feed-side ${side.tone}`}><small>{side.label}</small><b>{side.amount}</b></span>
+          </button>;
+        }
+        const payment = item.payment;
+        const date = new Date(payment.paidAt);
+        return <button className="feed-row pay" key={item.key} disabled={!payment.billId} onClick={() => payment.billId && onBillDetail(payment.billId)}>
+          <span className="feed-date"><small>{date.toLocaleDateString(undefined, { month: "short" })}</small><b>{date.getDate()}</b></span>
+          <HandCoins size={19} weight="duotone" className="feed-glyph glyph-pay" aria-hidden="true" />
+          <span className="feed-main"><b>{payment.payerUserId === user.id ? "You" : firstName(payment.payerName)} paid {payment.recipientUserId === user.id ? "you" : firstName(payment.recipientName)}</b><small>{payment.billName ? `toward ${payment.billName}` : "payment"} · confirmed</small></span>
+          <span className="feed-side pay"><b>{payment.recipientUserId === user.id ? "+" : ""}{money(payment.amountCents, currency)}</b></span>
+        </button>;
+      })}
+    </div>; })}
+    {!items.length && <p className="empty-copy">No bills yet. Add the first shared expense.</p>}
   </section>;
 }
 
@@ -559,7 +620,7 @@ function ClaimModal({ balance, existing, initialCents, currency, close, save }: 
     try { await save({ ...(existing ? {} : { creditorUserId: balance.recipientUserId }), amountCents, ...(note.trim() ? { note: note.trim() } : {}) }); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "The claim could not be sent"); setBusy(false); }
   }
-  return <Modal title={`Tell ${balance.recipientName ?? "them"} you paid`} subtitle="This doesn’t change any balances — they still confirm" close={close}><form className="pm" onSubmit={submit}>
+  return <Modal title={`Pay ${balance.recipientName ?? "them"}`} subtitle={`Enter what you sent — the balance changes when ${balance.recipientName ?? "they"} confirms it arrived`} close={close}><form className="pm" onSubmit={submit}>
     <label className="pm-amount"><span>$</span><input type="number" inputMode="decimal" min="0.01" max={(maxCents / 100).toFixed(2)} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus /></label>
     <div className="pm-chips"><button type="button" className={chip === "all" ? "on" : ""} onClick={() => setAmount((maxCents / 100).toFixed(2))}>All {money(maxCents, currency)}</button><button type="button" className={chip === "half" ? "on" : ""} onClick={() => setAmount((halfCents / 100).toFixed(2))}>Half</button><button type="button" className={chip === "custom" ? "on" : ""} onClick={() => setAmount("")}>Custom</button></div>
     {overMax && <p className="pm-conseq part">more than you owe — max {money(maxCents, currency)}</p>}
@@ -569,13 +630,12 @@ function ClaimModal({ balance, existing, initialCents, currency, close, save }: 
     <button type="button" className="pm-cancel" onClick={close}>Cancel</button>
   </form></Modal>; }
 
-function PaymentModal({ data, currentUserId, specific, close, save }: { data: HouseholdData; currentUserId: string; specific: (Balance & { billId?: string | null; billName?: string; note?: string }) | null; close: () => void; save: (body: unknown) => Promise<void> }) {
-  const billLocked = Boolean(specific?.billId);
-  const choices = billLocked && specific ? [specific] : data.balances.filter((item) => item.recipientUserId === currentUserId);
-  const initialIndex = specific && !billLocked ? Math.max(choices.findIndex((item) => item.payerUserId === specific.payerUserId), 0) : 0;
+function PaymentModal({ data, currentUserId, specific, close, save }: { data: HouseholdData; currentUserId: string; specific: (Balance & { note?: string }) | null; close: () => void; save: (body: unknown) => Promise<void> }) {
+  const choices = data.balances.filter((item) => item.recipientUserId === currentUserId);
+  const initialIndex = specific ? Math.max(choices.findIndex((item) => item.payerUserId === specific.payerUserId), 0) : 0;
   const [index, setIndex] = useState(initialIndex);
   const balance = choices[index];
-  const maxCents = specific && billLocked ? specific.amountCents : balance?.amountCents ?? 0;
+  const maxCents = balance?.amountCents ?? 0;
   const [amount, setAmount] = useState(maxCents ? ((specific ? Math.min(specific.amountCents, maxCents) : maxCents) / 100).toFixed(2) : "");
   const [note, setNote] = useState(specific?.note ?? "");
   const [idempotencyKey] = useState(() => crypto.randomUUID());
@@ -588,18 +648,18 @@ function PaymentModal({ data, currentUserId, specific, close, save }: { data: Ho
   const overMax = amountCents > maxCents;
   const consequence = !amountCents ? null
     : overMax ? { tone: "part", text: `more than ${payerLabel} owes — max ${money(maxCents, data.household.currency)}` }
-    : amountCents === maxCents ? { tone: "full", text: billLocked ? `✓ clears ${payerLabel}’s share of ${specific?.billName ?? "this bill"}` : `✓ settles everything ${payerLabel} owes you` }
+    : amountCents === maxCents ? { tone: "full", text: `✓ settles everything ${payerLabel} owes you` }
     : { tone: "part", text: `leaves ${money(maxCents - amountCents, data.household.currency)} still open` };
   function pick(nextIndex: number) { setIndex(nextIndex); const next = choices[nextIndex]; setAmount(next ? (next.amountCents / 100).toFixed(2) : ""); }
   async function submit(event: React.FormEvent) {
     event.preventDefault(); if (!balance || !amountCents || overMax) return;
     setBusy(true); setError("");
-    try { await save({ idempotencyKey, billId: specific?.billId ?? null, payerUserId: balance.payerUserId, recipientUserId: balance.recipientUserId, amountCents, note, paidAt: new Date().toISOString() }); }
+    try { await save({ idempotencyKey, payerUserId: balance.payerUserId, recipientUserId: balance.recipientUserId, amountCents, note, paidAt: new Date().toISOString() }); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to confirm payment"); setBusy(false); }
   }
-  return <Modal title="Confirm payment received" subtitle={billLocked ? `Toward ${specific?.billName ?? "a bill"}` : "Money you received toward a balance"} close={close}>{balance ? <form className="pm" onSubmit={submit}>
+  return <Modal title="Confirm payment received" subtitle="Money you received toward your balance" close={close}>{balance ? <form className="pm" onSubmit={submit}>
     <span className="pm-lbl">WHO PAID YOU?</span>
-    <div className="pm-pills">{choices.map((item, itemIndex) => <button type="button" key={`${item.payerUserId}:${item.recipientUserId}`} className={`pm-pill${index === itemIndex ? " on" : ""}`} disabled={billLocked} onClick={() => pick(itemIndex)}><Avatar name={item.payerName ?? ""} /><small>{money(item.amountCents, data.household.currency)}</small></button>)}</div>
+    <div className="pm-pills">{choices.map((item, itemIndex) => <button type="button" key={`${item.payerUserId}:${item.recipientUserId}`} className={`pm-pill${index === itemIndex ? " on" : ""}`} onClick={() => pick(itemIndex)}><Avatar name={item.payerName ?? ""} /><small>{money(item.amountCents, data.household.currency)}</small></button>)}</div>
     <label className="pm-amount"><span>$</span><input type="number" inputMode="decimal" min="0.01" max={(maxCents / 100).toFixed(2)} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus /></label>
     <div className="pm-chips"><button type="button" className={chip === "all" ? "on" : ""} onClick={() => setAmount((maxCents / 100).toFixed(2))}>All {money(maxCents, data.household.currency)}</button><button type="button" className={chip === "half" ? "on" : ""} onClick={() => setAmount((halfCents / 100).toFixed(2))}>Half</button><button type="button" className={chip === "custom" ? "on" : ""} onClick={() => setAmount("")}>Custom</button></div>
     {consequence && <p className={`pm-conseq ${consequence.tone}`}>{consequence.text}</p>}
@@ -653,7 +713,7 @@ function InviteModal({ householdName, householdId, mutate, close }: { householdN
   </Modal>;
 }
 
-function BillDetailModal({ detail, userId, currency, claims, canClaim, onClaim, close, edit, remove, record, settle, closeWithoutPayment, addComment, uploadAttachment, removeAttachment, attachmentHref }: { detail: BillDetailData; userId: string; currency: string; claims: Claim[]; canClaim: (item: BillDetailData["obligations"][number]) => boolean; onClaim: (item: BillDetailData["obligations"][number]) => void; close: () => void; edit: () => void; remove: () => Promise<void>; record: (item: BillDetailData["obligations"][number]) => void; settle: (item: BillDetailData["obligations"][number]) => Promise<void>; closeWithoutPayment: () => Promise<void>; addComment: (body: string) => Promise<void>; uploadAttachment: (file: File) => Promise<void>; removeAttachment: (attachmentId: string) => Promise<void>; attachmentHref: (attachmentId: string) => string }) {
+function BillDetailModal({ detail, userId, currency, claims, canClaim, onClaim, close, edit, remove, addComment, uploadAttachment, removeAttachment, attachmentHref }: { detail: BillDetailData; userId: string; currency: string; claims: Claim[]; canClaim: (item: BillDetailData["obligations"][number]) => boolean; onClaim: (item: BillDetailData["obligations"][number]) => void; close: () => void; edit: () => void; remove: () => Promise<void>; addComment: (body: string) => Promise<void>; uploadAttachment: (file: File) => Promise<void>; removeAttachment: (attachmentId: string) => Promise<void>; attachmentHref: (attachmentId: string) => string }) {
   const [comment, setComment] = useState("");
   const [workError, setWorkError] = useState("");
   const [commentBusy, setCommentBusy] = useState(false);
@@ -674,28 +734,20 @@ function BillDetailModal({ detail, userId, currency, claims, canClaim, onClaim, 
     try { await uploadAttachment(file); } catch (cause) { setWorkError(cause instanceof Error ? cause.message : "The attachment could not be uploaded"); }
     finally { setUploadBusy(false); }
   }
-  const isSettled = detail.bill.status === "settled";
   const Glyph = CATEGORY_ICONS[detail.bill.category] ?? CATEGORY_ICONS.other;
-  const totalOutstanding = detail.obligations.reduce((sum, item) => sum + item.outstandingAmountCents, 0);
-  const settledCents = detail.bill.amountCents - totalOutstanding;
-  const myOutstanding = detail.obligations.filter((item) => item.debtorUserId === userId).reduce((sum, item) => sum + item.outstandingAmountCents, 0);
-  const owedToMe = detail.obligations.filter((item) => item.creditorUserId === userId).reduce((sum, item) => sum + item.outstandingAmountCents, 0);
-  const lastPaymentFor = (debtorUserId: string) => detail.payments.filter((payment) => payment.payerUserId === debtorUserId).sort((a, b) => +new Date(b.paidAt) - +new Date(a.paidAt))[0];
   return <Modal title={detail.bill.name} subtitle={`${detail.bill.periodLabel} · ${CATEGORY_LABELS[detail.bill.category] ?? CATEGORY_LABELS.other} · ${detail.bill.amountState}`} close={close}>
     <div className="bd">
-      <div className="bd-head"><span className="bd-glyph"><Glyph size={24} weight="duotone" className={`bill-cat cat-${detail.bill.category}`} /></span><span className={`bd-amt${isSettled ? " done" : ""}`}><b>{money(detail.bill.amountCents, currency)}</b><small>{isSettled ? "SETTLED ✓" : "OUTSTANDING"}</small></span></div>
-      {detail.bill.amountCents > 0 && <div className="bd-bar" aria-hidden><i className="done" style={{ width: `${Math.round((settledCents / detail.bill.amountCents) * 100)}%` }} /><i className="open" style={{ width: `${Math.round((totalOutstanding / detail.bill.amountCents) * 100)}%` }} /></div>}
-      <span className="bd-barlbl">{money(settledCents, currency)} settled · {money(totalOutstanding, currency)} to go{myOutstanding > 0 ? ` — you owe ${money(myOutstanding, currency)}` : owedToMe > 0 ? ` — ${money(owedToMe, currency)} owed to you` : ""}</span>
+      <div className="bd-head"><span className="bd-glyph"><Glyph size={24} weight="duotone" className={`bill-cat cat-${detail.bill.category}`} /></span><span className="bd-amt"><b>{money(detail.bill.amountCents, currency)}</b><small>TOTAL</small></span></div>
 
       <div className="bd-band">
         <div className="bd-bh"><strong>People</strong><small>{detail.contributions.map((item) => item.displayName).join(", ")} paid · {detail.bill.allocationMethod} split</small></div>
         {detail.contributions.map((item) => { const share = detail.allocations.find((allocation) => allocation.userId === item.userId); return <div className="bd-row" key={item.id}><Avatar name={item.displayName} /><span className="bd-t"><b>{item.userId === userId ? "You" : item.displayName}</b><small>paid {money(item.amountCents, currency)}{share ? ` · own share ${money(share.amountCents, currency)} covered` : ""}</small></span><span className="bd-ramt done">✓</span></div>; })}
-        {detail.obligations.map((item) => { const canConfirm = item.creditorUserId === userId && !isSettled; const paid = item.outstandingAmountCents === 0; const lastPay = paid ? lastPaymentFor(item.debtorUserId) : undefined; return <div className="bd-row" key={item.id}>
+        {detail.obligations.map((item) => <div className="bd-row" key={item.id}>
           <Avatar name={item.debtorName} />
-          <span className="bd-t"><b>{item.debtorUserId === userId ? "You" : item.debtorName}</b><small>{paid ? `owed ${money(item.originalAmountCents, currency)} · settled${lastPay ? ` ${new Date(lastPay.paidAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : ""}` : isSettled ? `owed ${money(item.originalAmountCents, currency)} · closed` : `owe${item.debtorUserId === userId ? "" : "s"} ${item.creditorUserId === userId ? "you" : item.creditorName} · ${money(item.paidAmountCents, currency)} paid of ${money(item.originalAmountCents, currency)}`}</small></span>
-          <span className={`bd-ramt${paid || isSettled ? " done" : ""}`}>{money(paid ? item.originalAmountCents : item.outstandingAmountCents, currency)}</span>
-          {paid ? <span className="bd-wait done">✓</span> : isSettled ? <span className="bd-wait done">closed</span> : canConfirm ? <span className="bd-acts"><button className="bd-ghost" onClick={() => record(item)}>Partial</button><button className="bd-confirm" onClick={() => void settle(item)}>Confirm all</button></span> : (() => { if (item.debtorUserId !== userId) return <span className="bd-wait">{`waiting on ${item.creditorName}`}</span>; const myPending = claims.find((claim) => claim.debtorUserId === userId && claim.creditorUserId === item.creditorUserId); if (myPending) return <span className="bd-wait">you said you paid · waiting on {item.creditorName}</span>; if (canClaim(item)) return <button className="bd-confirm" onClick={() => onClaim(item)}>I paid this</button>; return <span className="bd-wait" title={`Overall, ${item.creditorName} owes you more than this — nothing to claim`}>{`waiting on ${item.creditorName}`}</span>; })()}
-        </div>; })}
+          <span className="bd-t"><b>{item.debtorUserId === userId ? "You" : item.debtorName}</b><small>{item.debtorUserId === userId ? `your share — you owe ${item.creditorUserId === userId ? "yourself" : item.creditorName}` : `their share — owe${item.debtorUserId === userId ? "" : "s"} ${item.creditorUserId === userId ? "you" : item.creditorName}`}</small></span>
+          <span className="bd-ramt">{money(item.originalAmountCents, currency)}</span>
+          {item.debtorUserId === userId && canClaim(item) && !claims.some((claim) => claim.debtorUserId === userId && claim.creditorUserId === item.creditorUserId) ? <button className="bd-confirm" onClick={() => onClaim(item)}>I paid this</button> : null}
+        </div>)}
         {!detail.obligations.length && <p className="empty-copy">No repayments are required for this expense.</p>}
       </div>
 
@@ -710,7 +762,7 @@ function BillDetailModal({ detail, userId, currency, claims, canClaim, onClaim, 
       {workError && <p className="form-error">{workError}</p>}
       <button type="button" className="bd-disclose" onClick={() => setHistoryOpen((value) => !value)}>History ({detail.history.length}) <b>{historyOpen ? "Hide" : "Show"}</b></button>
       {historyOpen && <div className="bd-history">{detail.history.map((item) => <div key={item.id}><b>{item.changeType.replaceAll("_", " ")}</b><small>{item.changedBy} · {new Date(item.changedAt).toLocaleString()}</small></div>)}</div>}
-      <div className="bd-foot">{!isSettled && <button className="bd-txt" onClick={edit}>Edit terms</button>}{!isSettled && <button className="bd-txt" onClick={() => void closeWithoutPayment()}>Close without payment</button>}<button className="bd-txt danger" onClick={() => void remove()}>Remove</button><button className="bd-done" onClick={close}>Done</button></div>
+      <div className="bd-foot"><button className="bd-txt" onClick={edit}>Edit terms</button><button className="bd-txt danger" onClick={() => void remove()}>Remove</button><button className="bd-done" onClick={close}>Done</button></div>
     </div>
   </Modal>; }
 
