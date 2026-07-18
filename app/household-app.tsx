@@ -1,18 +1,18 @@
 "use client";
 
-import { ArrowDownLeft, ArrowRight, Bell, BellRing, Check, Copy, Download, FileText, LayoutDashboard, Menu, Paperclip, Plus, ReceiptText, Settings, Trash2, UserPlus, WalletCards, X } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, Bell, Check, Copy, Download, FileText, LayoutDashboard, Menu, Paperclip, Plus, ReceiptText, Settings, Trash2, UserPlus, WalletCards, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Basket, Car, FileX, ForkKnife, HandCoins, House as HouseDuotone, Lightbulb as LightbulbDuotone, Package as PackageDuotone, Repeat as RepeatDuotone, SealCheck, Shapes as ShapesDuotone, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { BILL_CATEGORIES, CATEGORY_LABELS, type BillCategory } from "@/lib/categories";
 import { isThemeId } from "@/lib/themes";
 
-type Tab = "overview" | "bills" | "balances" | "activity";
-const TAB_LABELS: Record<Tab, string> = { overview: "Overview", bills: "Bills", balances: "Settle up", activity: "Activity" };
+type Tab = "overview" | "bills" | "activity";
+const TAB_LABELS: Record<Tab, string> = { overview: "Home", bills: "Bills", activity: "Activity" };
 type ModalName = "bill" | "edit" | "payment" | "recurring-edit" | "detail" | "invite" | "claim" | null;
 type User = { id: string; email: string; displayName: string; role: "member" | "administrator" };
 type HouseholdListItem = { id: string; name: string; currency: string };
 type Member = { id: string; displayName: string; email: string };
-type Bill = { id: string; name: string; category: BillCategory; amountCents: number; periodLabel: string; dueDate?: string | null; amountState: "estimated" | "final"; status: "draft" | "open" | "settled" | "void"; createdByName?: string; createdAt: string };
+type Bill = { id: string; name: string; category: BillCategory; amountCents: number; periodLabel: string; dueDate?: string | null; amountState: "estimated" | "final"; status: "draft" | "open" | "settled" | "void"; createdByName?: string; payerUserId?: string | null; payerName?: string | null; createdAt: string };
 type BalanceComponent = { billId: string; billName: string; category: BillCategory; amountCents: number };
 type Balance = { payerUserId: string; recipientUserId: string; payerName?: string; recipientName?: string; amountCents: number; components?: BalanceComponent[] };
 type Payment = { id: string; billId?: string | null; payerUserId: string; recipientUserId: string; payerName?: string; recipientName?: string; actorName?: string; billName?: string | null; amountCents: number; note?: string | null; paidAt: string };
@@ -48,8 +48,6 @@ export function HouseholdApp() {
   const [paymentContext, setPaymentContext] = useState<(Balance & { billId?: string | null; billName?: string; note?: string }) | null>(null);
   const [selectedRecurring, setSelectedRecurring] = useState<Recurring | null>(null);
   const [claimContext, setClaimContext] = useState<{ balance: Balance; existing?: Claim; initialCents?: number } | null>(null);
-  const [billsMonth, setBillsMonth] = useState<string | null>(null);
-  function navTo(next: Tab) { if (next === "bills") setBillsMonth(null); setTab(next); }
 
   useEffect(() => {
     document.documentElement.dataset.theme = "dark";
@@ -202,18 +200,19 @@ export function HouseholdApp() {
         <select aria-label="Choose household" value={householdId} onChange={(e) => setHouseholdId(e.target.value)}>{session?.households.map((household) => <option key={household.id} value={household.id}>{household.name}</option>)}</select>
       </label>
       <button className="side-invite" onClick={() => { setModal("invite"); setSidebarOpen(false); }}><UserPlus size={15} /> Invite a roommate</button>
-      <nav className="side-nav">{(["overview", "bills", "balances", "activity"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => { navTo(item); setSidebarOpen(false); }}>{item === "overview" ? <LayoutDashboard size={19} /> : item === "bills" ? <ReceiptText size={19} /> : item === "balances" ? <WalletCards size={19} /> : <FileText size={19} />}<span>{TAB_LABELS[item]}</span></button>)}</nav>
+      <nav className="side-nav">{(["overview", "bills", "activity"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => { setTab(item); setSidebarOpen(false); }}>{item === "overview" ? <LayoutDashboard size={19} /> : item === "bills" ? <ReceiptText size={19} /> : <FileText size={19} />}<span>{TAB_LABELS[item]}</span></button>)}</nav>
       <div className="side-bottom"><a className="side-link" href="/settings"><Settings size={19} /> User settings</a><a className="profile-card" href="/settings"><Avatar name={session?.user.displayName ?? ""} /><span><strong>{session?.user.displayName}</strong><small>{session?.user.email}</small></span></a></div>
     </aside>
     {sidebarOpen && <button className="scrim" aria-label="Close menu" onClick={() => setSidebarOpen(false)} />}
     <main className="main"><header className="topbar"><button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open menu"><Menu size={22} /></button><div className="top-actions"><button className="install-pill" onClick={install}><ArrowDownLeft size={16} /> Install app</button><button className="icon-button notification-button" onClick={openNotifications} aria-label="Notifications"><Bell size={20} />{notifications.some((item) => !item.readAt) && <span className="unread-dot" />}</button><a className="icon-button" href="/settings" aria-label="User settings"><Settings size={20} /></a><Avatar name={session?.user.displayName ?? ""} /></div>
       {notificationsOpen && <><button className="panel-scrim" aria-label="Close notifications" onClick={() => setNotificationsOpen(false)} /><div className="notification-panel"><div className="panel-title"><strong>Notifications</strong><span>{notifications.filter((item) => !item.readAt).length} new</span></div>{notifications.length ? notifications.slice(0, 8).map((item) => { const age = Date.now() - +new Date(item.createdAt); const when = age < 3_600_000 ? `${Math.max(Math.round(age / 60_000), 1)}m ago` : age < 86_400_000 ? `${Math.round(age / 3_600_000)}h ago` : new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }); return <button key={item.id} onClick={() => { setNotificationsOpen(false); const billId = item.targetPath ? new URLSearchParams(item.targetPath.split("?")[1] ?? "").get("bill") : null; if (billId) void openBill(billId); else setTab("overview"); }}>{item.type === "payment" ? <HandCoins size={18} weight="duotone" className="panel-glyph pay" /> : item.type === "balance" ? <Bell size={17} className="panel-glyph balance" /> : <ReceiptText size={17} className="panel-glyph bill" />}<span><strong>{item.title}</strong><small>{item.body}</small></span><time>{when}</time></button>; }) : <p className="panel-empty">You’re all caught up.</p>}</div></>}
     </header>
-    <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1></div><p>{tab === "overview" ? "Here’s where everyone stands today." : tab === "bills" ? "Outstanding, settled, and scheduled household expenses." : tab === "balances" ? "Everyone’s position and the fewest payments to clear it." : "Recent bills, settlements, closures, and payments."}</p></div><div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div></div>
+    <div className="content-wrap"><div className="page-heading"><div><p className="eyebrow">{data?.household.name.toUpperCase()} · {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" }).toUpperCase()}</p><div className="page-title-row"><h1>{title}</h1></div><p>{tab === "overview" ? "Here’s where everyone stands today." : tab === "bills" ? "Every bill and payment, newest first." : "Recent bills, settlements, closures, and payments."}</p></div><div className="heading-actions"><button className="secondary-button" disabled={!receivableBalances.length} onClick={() => openPayment()}><ArrowRight size={17} /> Confirm payment</button><button className="primary-button" onClick={() => setModal("bill")}><Plus size={18} /> Add bill</button></div></div>
       {error && <div className="error-banner">{error}<button onClick={() => void refresh()}>Try again</button></div>}
-      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onPayment={(context) => openPayment(context ?? null)} onNudge={sendNudge} onClaim={(balance) => openClaim(balance)} onEditClaim={(balance, existing) => openClaim(balance, existing)} onCancelClaim={cancelClaim} onDismissClaim={dismissClaim} onBillDetail={openBill} onOpenBills={() => { setBillsMonth(new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })); setTab("bills"); }} /> : tab === "bills" ? <Bills data={data!} user={session!.user} initialMonth={billsMonth} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : tab === "balances" ? <SettleUp data={data!} user={session!.user} onPayment={(context) => openPayment(context ?? null)} /> : <Activity data={data!} user={session!.user} householdId={householdId} onBillDetail={openBill} />}
+      {loading ? <div className="wide-card loading-card">Refreshing ledger…</div> : tab === "overview" ? <Overview data={data!} user={session!.user} net={net} onPayment={(context) => openPayment(context ?? null)} onNudge={sendNudge} onClaim={(balance) => openClaim(balance)} onEditClaim={(balance, existing) => openClaim(balance, existing)} onCancelClaim={cancelClaim} onDismissClaim={dismissClaim} onOpenBills={() => setTab("bills")} /> : tab === "bills" ? <Bills data={data!} user={session!.user} onBillDetail={openBill} onEditRecurring={(item) => { setSelectedRecurring(item); setModal("recurring-edit"); }} /> : <Activity data={data!} user={session!.user} householdId={householdId} onBillDetail={openBill} />}
     </div></main>
-    <nav className="bottom-nav">{(["overview", "bills"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={navTo} />)}<button className="fab" onClick={() => setModal("bill")}><Plus size={24} /></button>{(["balances", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={navTo} />)}</nav>
+    <nav className="bottom-nav">{(["overview", "bills", "activity"] as Tab[]).map((item) => <MobileNav key={item} item={item} tab={tab} setTab={setTab} />)}</nav>
+    <button className="fab" onClick={() => setModal("bill")} aria-label="Add bill"><Plus size={24} /></button>
     {modal === "bill" && data && <BillModal data={data} currentUserId={session?.user.id} close={() => setModal(null)} save={async (body, recurring) => { await mutate(`/api/households/${householdId}/bills`, "POST", { ...(body as object), ...(recurring ? { recurring } : {}) }); setModal(null); setToast(recurring ? "Bill and recurring schedule added." : "Bill added to the household ledger."); setAddAnother(true); await refresh(); }} />}
     {modal === "edit" && data && billDetail && <BillModal data={data} currentUserId={session?.user.id} initial={billDetail} close={() => setModal("detail")} save={async (body) => { await mutate(`/api/households/${householdId}/bills/${billDetail.bill.id}`, "PATCH", body); setModal(null); setToast("Bill updated and balances recalculated."); await refresh(); }} />}
     {modal === "claim" && data && claimContext && <ClaimModal balance={claimContext.balance} existing={claimContext.existing} initialCents={claimContext.initialCents} currency={data.household.currency} close={() => { setModal(null); setClaimContext(null); }} save={async (body) => { if (claimContext.existing) await mutate(`/api/households/${householdId}/claims/${claimContext.existing.id}`, "PATCH", body); else await mutate(`/api/households/${householdId}/claims`, "POST", body); setModal(null); setClaimContext(null); setToast(claimContext.existing ? "Claim updated." : `${claimContext.balance.recipientName} will be asked to confirm.`); await refresh(); }} />}
@@ -237,176 +236,131 @@ const CATEGORY_ICONS = {
   other: ShapesDuotone,
 } satisfies Record<BillCategory, PhosphorIcon>;
 
-function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "overview" ? LayoutDashboard : item === "bills" ? ReceiptText : item === "balances" ? WalletCards : FileText; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{item === "overview" ? "Home" : TAB_LABELS[item]}</small></button>; }
+function MobileNav({ item, tab, setTab }: { item: Tab; tab: Tab; setTab: (value: Tab) => void }) { const Icon = item === "overview" ? LayoutDashboard : item === "bills" ? ReceiptText : FileText; return <button className={tab === item ? "active" : ""} onClick={() => setTab(item)}><Icon size={21} /><small>{TAB_LABELS[item]}</small></button>; }
 
-function BalanceCard({ item, currency, mine, direction, pendingClaim, onOpen, onConfirm, onNudge, onClaim, onEditClaim, onCancelClaim, onBillDetail }: { item: Balance; currency: string; mine: boolean; direction: "in" | "out" | "other"; pendingClaim?: Claim; onOpen: () => void; onConfirm: (item: Balance) => void; onNudge: (item: Balance) => void; onClaim: (item: Balance) => void; onEditClaim: (item: Balance, claim: Claim) => void; onCancelClaim: (claim: Claim) => void; onBillDetail: (id: string) => void }) {
-  const components = item.components ?? [];
-  const title = direction === "in" ? item.payerName : direction === "out" ? `You owe ${item.recipientName}` : `${item.payerName} → ${item.recipientName}`;
-  return <section className={`glance-card glance-tappable${mine ? "" : " glance-other"}`} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" && event.target === event.currentTarget) onOpen(); }}>
-    <div className="glance-card-top">{direction === "other" ? <div className="avatar-pair"><Avatar name={item.payerName ?? ""} /><Avatar name={item.recipientName ?? ""} /></div> : <Avatar name={(direction === "in" ? item.payerName : item.recipientName) ?? ""} />}<span className="glance-who"><strong>{title}</strong><small>{direction === "out" ? (pendingClaim ? "You said you paid — waiting on them" : "Awaiting their confirmation") : `${components.length || "No"} bill${components.length === 1 ? "" : "s"} open`}</small></span><span className="glance-amt">{money(item.amountCents, currency)}</span></div>
-    {components.length > 0 && <div className="glance-breakdown">{components.map((component) => <i key={component.billId} className={`glance-seg category-${component.category}`} style={{ width: `${Math.max((component.amountCents / item.amountCents) * 100, 3)}%` }} title={`${component.billName} — ${money(component.amountCents, currency)}`} />)}</div>}
-    {components.length > 0 && <div className="glance-keys">{components.map((component) => <button key={component.billId} onClick={(event) => { event.stopPropagation(); onBillDetail(component.billId); }}><i className={`category-${component.category}`} />{component.billName} <b>{money(component.amountCents, currency)}</b></button>)}</div>}
-    {direction === "in" && <div className="glance-actions"><button className="glance-confirm" onClick={(event) => { event.stopPropagation(); onConfirm(item); }}>Confirm payment</button><button className="glance-remind" onClick={(event) => { event.stopPropagation(); void onNudge(item); }}><BellRing size={14} /> Remind</button></div>}
-    {direction === "out" && !pendingClaim && <div className="glance-actions"><button className="glance-confirm" onClick={(event) => { event.stopPropagation(); onClaim(item); }}>I paid this</button><span className="glance-claimhint">then {item.recipientName} confirms</span></div>}
-    {direction === "out" && pendingClaim && <div className="glance-actions"><span className="glance-pendtag"><i />you said you paid {money(pendingClaim.amountCents, currency)} · waiting on {item.recipientName}</span><button className="glance-remind" onClick={(event) => { event.stopPropagation(); onEditClaim(item, pendingClaim); }}>Edit</button><button className="glance-remind danger" onClick={(event) => { event.stopPropagation(); void onCancelClaim(pendingClaim); }}>Cancel</button></div>}
-  </section>;
-}
-
-function Overview({ data, user, net, onPayment, onNudge, onClaim, onEditClaim, onCancelClaim, onDismissClaim, onBillDetail, onOpenBills }: { data: HouseholdData; user: User; net: number; onPayment: (context?: Balance & { note?: string }) => void; onNudge: (item: Balance) => void; onClaim: (item: Balance) => void; onEditClaim: (item: Balance, claim: Claim) => void; onCancelClaim: (claim: Claim) => void; onDismissClaim: (claim: Claim) => void; onBillDetail: (id: string) => void; onOpenBills: () => void }) {
+function Overview({ data, user, net, onPayment, onNudge, onClaim, onEditClaim, onCancelClaim, onDismissClaim, onOpenBills }: { data: HouseholdData; user: User; net: number; onPayment: (context?: Balance & { note?: string }) => void; onNudge: (item: Balance) => void; onClaim: (item: Balance) => void; onEditClaim: (item: Balance, claim: Claim) => void; onCancelClaim: (claim: Claim) => void; onDismissClaim: (claim: Claim) => void; onOpenBills: () => void }) {
   const currency = data.household.currency;
   const owedToMe = data.balances.filter((item) => item.recipientUserId === user.id);
   const iOwe = data.balances.filter((item) => item.payerUserId === user.id);
   const others = data.balances.filter((item) => item.payerUserId !== user.id && item.recipientUserId !== user.id);
-  const openBillCount = data.bills.filter((bill) => bill.status === "open").length;
-  const debtorNames = owedToMe.map((item) => item.payerName).filter(Boolean);
-  const [dayAgo] = useState(() => Date.now() - 86_400_000);
-  const recentReceipts = data.payments.filter((payment) => payment.recipientUserId === user.id && new Date(payment.paidAt).getTime() > dayAgo);
-  const receiptTotal = recentReceipts.reduce((sum, payment) => sum + payment.amountCents, 0);
-  const latestReceipt = recentReceipts[0];
   const claimsForMe = data.claims.filter((claim) => claim.creditorUserId === user.id);
   const claimFor = (recipientUserId: string) => data.claims.find((claim) => claim.debtorUserId === user.id && claim.creditorUserId === recipientUserId);
-  return <div className="glance-grid">
-    <div className="glance-col">
-      <section className="glance-hero"><span className="glance-k">{net < 0 ? "You owe" : "You are owed"}</span><strong className="glance-big">{money(Math.abs(net), currency)}</strong>
-        <span className="glance-sub">{debtorNames.length ? `from ${debtorNames.join(" and ")} · ` : ""}{openBillCount} open bill{openBillCount === 1 ? "" : "s"}</span>
-        {receiptTotal > 0 && <span className="glance-delta">▼ {money(receiptTotal, currency)} less than yesterday{latestReceipt ? ` — ${latestReceipt.payerName} settled ${latestReceipt.billName ?? "a payment"}` : ""}</span>}
-      </section>
-      
-    </div>
-    <div className="glance-col">
-      {claimsForMe.map((claim) => <section className="glance-claim" key={claim.id}>
-        <div className="glance-claim-top"><Avatar name={claim.debtorName ?? ""} /><span className="glance-who"><strong>{claim.debtorName} says they paid you</strong><small>{claim.note ? `“${claim.note}” · ` : ""}{new Date(claim.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</small></span><span className="glance-amt claim">{money(claim.amountCents, currency)}</span></div>
-        <div className="glance-actions"><button className="glance-confirm" onClick={() => { const balance = data.balances.find((item) => item.payerUserId === claim.debtorUserId && item.recipientUserId === user.id); if (balance) onPayment({ ...balance, amountCents: Math.min(claim.amountCents, balance.amountCents), note: claim.note ?? undefined }); }}>Confirm received</button><button className="glance-remind danger" onClick={() => void onDismissClaim(claim)}>I didn’t get this</button></div>
-      </section>)}
-      {data.balances.length > 0 && <div className="glance-zone">
-        {owedToMe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="in" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onClaim={onClaim} onEditClaim={onEditClaim} onCancelClaim={onCancelClaim} onBillDetail={onBillDetail} />)}
-        {iOwe.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine direction="out" pendingClaim={claimFor(item.recipientUserId)} onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onClaim={onClaim} onEditClaim={onEditClaim} onCancelClaim={onCancelClaim} onBillDetail={onBillDetail} />)}
-        {others.map((item) => <BalanceCard key={`${item.payerUserId}:${item.recipientUserId}`} item={item} currency={currency} mine={false} direction="other" onOpen={onOpenBills} onConfirm={onPayment} onNudge={onNudge} onClaim={onClaim} onEditClaim={onEditClaim} onCancelClaim={onCancelClaim} onBillDetail={onBillDetail} />)}
-      </div>}
-      {!data.balances.length && <section className="glance-card glance-settled"><Check size={26} /><strong>Everyone is settled up</strong><small>New bills will appear here as balances open.</small></section>}
-    </div>
+  const myPending = iOwe.map((item) => ({ item, claim: claimFor(item.recipientUserId) })).find((entry) => entry.claim);
+  const nextRecurring = data.recurring.filter((item) => item.active).sort((a, b) => +new Date(a.nextOccurrence) - +new Date(b.nextOccurrence))[0];
+  const nextDue = nextRecurring ? new Date(nextRecurring.nextOccurrence) : null;
+  const billCount = (item: Balance) => { const count = (item.components ?? []).length; return `${count || "no"} open bill${count === 1 ? "" : "s"}`; };
+  const lede = !data.balances.length ? null
+    : net > 0 ? (owedToMe.length === 1 && !iOwe.length ? <>Overall, <b className="pos">{owedToMe[0].payerName} owes you {money(net, currency)}</b></> : <>Overall, <b className="pos">you are owed {money(net, currency)}</b></>)
+    : net < 0 ? (iOwe.length === 1 && !owedToMe.length ? <>Overall, <b className="neg">you owe {iOwe[0].recipientName} {money(-net, currency)}</b></> : <>Overall, <b className="neg">you owe {money(-net, currency)}</b></>)
+    : <>Overall, <b>you are all square</b> — open balances cancel out</>;
+  return <div className="home-view">
+    {lede && <p className="home-lede">{lede}</p>}
+    {claimsForMe.map((claim) => <section className="glance-claim" key={claim.id}>
+      <div className="glance-claim-top"><Avatar name={claim.debtorName ?? ""} /><span className="glance-who"><strong>{claim.debtorName} says they paid you</strong><small>{claim.note ? `“${claim.note}” · ` : ""}{new Date(claim.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</small></span><span className="glance-amt claim">{money(claim.amountCents, currency)}</span></div>
+      <div className="glance-actions"><button className="glance-confirm" onClick={() => { const balance = data.balances.find((item) => item.payerUserId === claim.debtorUserId && item.recipientUserId === user.id); if (balance) onPayment({ ...balance, amountCents: Math.min(claim.amountCents, balance.amountCents), note: claim.note ?? undefined }); }}>Confirm received</button><button className="glance-remind danger" onClick={() => void onDismissClaim(claim)}>I didn’t get this</button></div>
+    </section>)}
+    {data.balances.length > 0 && <div className="home-zone">
+      {owedToMe.map((item) => <button className="home-row" key={`${item.payerUserId}:${item.recipientUserId}`} onClick={onOpenBills}>
+        <Avatar name={item.payerName ?? ""} />
+        <span className="home-who"><b>{item.payerName}</b><small>{billCount(item)}</small></span>
+        <span className="home-amt pos"><b>{money(item.amountCents, currency)}</b><small>owes you</small></span>
+      </button>)}
+      {iOwe.map((item) => { const claim = claimFor(item.recipientUserId); return <button className="home-row" key={`${item.payerUserId}:${item.recipientUserId}`} onClick={onOpenBills}>
+        <Avatar name={item.recipientName ?? ""} />
+        <span className="home-who"><b>{item.recipientName}</b><small>{claim ? `you said you paid ${money(claim.amountCents, currency)} — waiting on them` : billCount(item)}</small></span>
+        <span className="home-amt neg"><b>{money(item.amountCents, currency)}</b><small>you owe</small></span>
+      </button>; })}
+      {others.map((item) => <button className="home-row other" key={`${item.payerUserId}:${item.recipientUserId}`} onClick={onOpenBills}>
+        <span className="avatar-pair"><Avatar name={item.payerName ?? ""} /><Avatar name={item.recipientName ?? ""} /></span>
+        <span className="home-who"><b>{item.payerName} → {item.recipientName}</b><small>{billCount(item)}</small></span>
+        <span className="home-amt"><b>{money(item.amountCents, currency)}</b><small>owes</small></span>
+      </button>)}
+    </div>}
+    {!data.balances.length && <section className="glance-card glance-settled"><Check size={26} /><strong>Everyone is settled up</strong><small>New bills will appear here as balances open.</small></section>}
+    {data.balances.length > 0 && <div className="home-actions">
+      {owedToMe.length > 0 && <button className="home-cta" onClick={() => onPayment()}>Settle up</button>}
+      {owedToMe.length > 0 && <button className="home-quiet" onClick={() => void onNudge(owedToMe[0])}>Remind</button>}
+      {iOwe.length > 0 && !myPending && <button className={owedToMe.length ? "home-quiet" : "home-cta"} onClick={() => onClaim(iOwe[0])}>{iOwe.length === 1 ? `I paid ${iOwe[0].recipientName}` : "Mark a payment as sent"}</button>}
+      {myPending?.claim && <><button className="home-quiet" onClick={() => onEditClaim(myPending.item, myPending.claim!)}>Edit claim</button><button className="home-quiet danger" onClick={() => void onCancelClaim(myPending.claim!)}>Cancel claim</button></>}
+    </div>}
+    {nextRecurring && nextDue && <button className="glance-due home-due" onClick={onOpenBills}><span className="glance-when">{nextDue.toLocaleDateString(undefined, { month: "short" }).toUpperCase()} {nextDue.getDate()}</span><span className="glance-due-what"><strong>Coming up · {nextRecurring.name}</strong><small>recurring · splits {nextRecurring.templateConfig.allocations.length} way{nextRecurring.templateConfig.allocations.length === 1 ? "" : "s"}</small></span><strong className="glance-due-amt">{nextRecurring.expectedAmountCents === null ? "varies" : money(nextRecurring.expectedAmountCents, currency)}</strong></button>}
   </div>;
 }
 
-function BillLine({ bill, currency, personal, onClick }: { bill: Bill; currency: string; personal?: { text: string; tone: "owe" | "in" }; onClick: () => void }) {
-  const Icon = CATEGORY_ICONS[bill.category] ?? CATEGORY_ICONS.other;
-  const settled = bill.status === "settled";
-  return <button className={`bill-line${settled ? " done" : " open"}`} onClick={onClick}>
-    <Icon size={19} weight="duotone" className={`bill-cat cat-${bill.category}`} aria-hidden="true" />
-    <span className="bill-line-text"><strong>{bill.name}</strong><small>{bill.periodLabel} · {CATEGORY_LABELS[bill.category] ?? CATEGORY_LABELS.other} · {bill.amountState}{personal ? <> · <em className={`bill-personal ${personal.tone}`}>{personal.text}</em></> : null}</small></span>
-    <span className="bill-line-amt"><b>{money(bill.amountCents, currency)}</b><small>{settled ? "SETTLED ✓" : "OUTSTANDING"}</small></span>
-  </button>;
-}
-
-function Bills({ data, user, initialMonth, onBillDetail, onEditRecurring }: { data: HouseholdData; user: User; initialMonth?: string | null; onBillDetail: (id: string) => void; onEditRecurring: (item: Recurring) => void }) {
+function Bills({ data, user, onBillDetail, onEditRecurring }: { data: HouseholdData; user: User; onBillDetail: (id: string) => void; onEditRecurring: (item: Recurring) => void }) {
   const currency = data.household.currency;
-  const [openMonth, setOpenMonth] = useState<string | null>(initialMonth ?? null);
-  const recorded = data.bills.reduce((sum, bill) => sum + bill.amountCents, 0);
-  const openBalances = data.balances.reduce((sum, item) => sum + item.amountCents, 0);
-  const openCount = data.bills.filter((bill) => bill.status === "open").length;
-  const categoryTotals = useMemo(() => {
-    const totals = new Map<BillCategory, number>();
-    for (const bill of data.bills) totals.set(bill.category, (totals.get(bill.category) ?? 0) + bill.amountCents);
-    return [...totals].sort((a, b) => b[1] - a[1]);
-  }, [data.bills]);
-  const spendTotal = categoryTotals.reduce((sum, [, amount]) => sum + amount, 0);
+  const [schedOpen, setSchedOpen] = useState(false);
   const schedules = [...data.recurring].sort((a, b) => +new Date(a.nextOccurrence) - +new Date(b.nextOccurrence));
   const monthlyEquivalent = Math.round(schedules.reduce((sum, item) => { if (!item.active || item.expectedAmountCents === null) return sum; const factor = item.cadence === "weekly" ? 52 / 12 : item.cadence === "monthly" ? 1 : item.cadence === "quarterly" ? 1 / 3 : 1 / 12; return sum + item.expectedAmountCents * factor; }, 0));
-  // Per-bill personal amounts, derived from the same balance components the homepage uses.
+  // Personal amounts per bill, from the same balance components the homepage uses.
   const youOweByBill = new Map<string, number>();
   const owedToYouByBill = new Map<string, number>();
   for (const balance of data.balances) for (const component of balance.components ?? []) {
     if (balance.payerUserId === user.id) youOweByBill.set(component.billId, (youOweByBill.get(component.billId) ?? 0) + component.amountCents);
     if (balance.recipientUserId === user.id) owedToYouByBill.set(component.billId, (owedToYouByBill.get(component.billId) ?? 0) + component.amountCents);
   }
-  const months = useMemo(() => {
-    const groups = new Map<string, Bill[]>();
-    for (const bill of data.bills) { const key = bill.periodLabel; const group = groups.get(key); if (group) group.push(bill); else groups.set(key, [bill]); }
-    return [...groups.entries()].map(([label, bills]) => ({ label, bills, latest: Math.max(...bills.map((bill) => +new Date(bill.createdAt))), parsed: +new Date(label) }))
-      .sort((a, b) => (Number.isNaN(b.parsed) || Number.isNaN(a.parsed) ? b.latest - a.latest : b.parsed - a.parsed));
-  }, [data.bills]);
-  const monthOwe = (bills: Bill[]) => bills.reduce((sum, bill) => sum + (youOweByBill.get(bill.id) ?? 0), 0);
-  const monthOwed = (bills: Bill[]) => bills.reduce((sum, bill) => sum + (owedToYouByBill.get(bill.id) ?? 0), 0);
-  const personalFor = (bill: Bill) => { const owe = youOweByBill.get(bill.id) ?? 0; const owed = owedToYouByBill.get(bill.id) ?? 0; return owe > 0 ? { text: `you still owe ${money(owe, currency)}`, tone: "owe" as const } : owed > 0 ? { text: `owed to you ${money(owed, currency)}`, tone: "in" as const } : undefined; };
-
-  const current = openMonth ? months.find((month) => month.label === openMonth) : undefined;
-  if (current) {
-    const open = current.bills.filter((bill) => bill.status === "open");
-    const settled = current.bills.filter((bill) => bill.status === "settled");
-    const owe = monthOwe(current.bills); const owed = monthOwed(current.bills);
-    return <section className="page-content bills-view">
-      <button className="bills-back" onClick={() => setOpenMonth(null)}>‹ Months <span>·</span> <b>{current.label}</b></button>
-      <p className="bills-monthline">{current.bills.length} bill{current.bills.length === 1 ? "" : "s"} · {money(current.bills.reduce((sum, bill) => sum + bill.amountCents, 0), currency)} recorded{owe > 0 ? <> · <b>you still owe {money(owe, currency)}</b></> : null}{owed > 0 ? ` · owed to you ${money(owed, currency)}` : ""}</p>
-      <div className="bills-band">
-        <div className="bills-band-head"><strong>Outstanding</strong><small>{open.length} bill{open.length === 1 ? "" : "s"}</small><span className="bills-sum open">{money(open.reduce((sum, bill) => sum + bill.amountCents, 0), currency)}</span></div>
-        {open.map((bill) => <BillLine key={bill.id} bill={bill} currency={currency} personal={personalFor(bill)} onClick={() => onBillDetail(bill.id)} />)}
-        {!open.length && <p className="empty-copy">Nothing outstanding in {current.label}.</p>}
-      </div>
-      <div className="bills-band quiet">
-        <div className="bills-band-head"><strong>Settled</strong><small>{settled.length} bill{settled.length === 1 ? "" : "s"}</small><span className="bills-sum done">{money(settled.reduce((sum, bill) => sum + bill.amountCents, 0), currency)}</span></div>
-        {settled.map((bill) => <BillLine key={bill.id} bill={bill} currency={currency} onClick={() => onBillDetail(bill.id)} />)}
-        {!settled.length && <p className="empty-copy">No settled expenses yet.</p>}
-      </div>
-    </section>;
-  }
-
-  return <section className="page-content bills-view">
-    <div className="bills-stats">
-      <div><small>RECORDED</small><b>{money(recorded, currency)}</b></div>
-      <div className="accent"><small>OPEN BALANCES</small><b>{money(openBalances, currency)}</b></div>
-      <div><small>BILLS</small><b>{openCount} / {data.bills.length}</b></div>
-    </div>
-    {categoryTotals.length > 0 && <div className="category-breakdown"><p className="eyebrow">SPENDING BY CATEGORY</p>{categoryTotals.map(([category, amountCents]) => <div className="category-line" key={category}><span>{CATEGORY_LABELS[category] ?? CATEGORY_LABELS.other}</span><span className="category-bar"><span style={{ width: `${spendTotal ? Math.max(3, Math.round(amountCents / spendTotal * 100)) : 0}%` }} /></span><strong>{money(amountCents, currency)}</strong></div>)}</div>}
-    <span className="bills-months-lbl">MONTHS</span>
-    {months.map((month) => { const owe = monthOwe(month.bills); const owed = monthOwed(month.bills); const allSettled = month.bills.every((bill) => bill.status === "settled");
-      return <button className={`bills-mrow${allSettled ? " quiet" : ""}`} key={month.label} onClick={() => setOpenMonth(month.label)}>
-        <span className="bills-mrow-t"><b>{month.label}</b><small>{month.bills.length} bill{month.bills.length === 1 ? "" : "s"} · {money(month.bills.reduce((sum, bill) => sum + bill.amountCents, 0), currency)} recorded</small></span>
-        {allSettled ? <span className="bills-mrow-done">✓ settled</span> : <span className="bills-mrow-owe">{owe > 0 ? <><b>{money(owe, currency)}</b><small>YOU STILL OWE</small></> : <span className="bills-mrow-zero">nothing from you</span>}{owed > 0 && <span className="bills-mrow-in">owed to you {money(owed, currency)}</span>}</span>}
-        <span className="bills-mrow-chev">›</span>
-      </button>; })}
-    {!months.length && <p className="empty-copy">No bills yet. Add the first shared expense.</p>}
-    <div className="bills-band quiet">
-      <div className="bills-band-head"><strong>Scheduled</strong><small>{schedules.length} recurring · tap to edit</small>{monthlyEquivalent > 0 && <span className="bills-sum sched">≈ {money(monthlyEquivalent, currency)} / mo</span>}</div>
-      {schedules.map((item) => { const date = new Date(item.nextOccurrence); return <button className="bill-line sched" key={item.id} onClick={() => onEditRecurring(item)}>
-        <span className="bill-when">{date.toLocaleDateString(undefined, { month: "short" }).toUpperCase()} {date.getDate()}</span>
-        <span className="bill-line-text"><strong>{item.name}</strong><small>{item.cadence} · splits {item.templateConfig.allocations.length} way{item.templateConfig.allocations.length === 1 ? "" : "s"}</small></span>
-        <span className="bill-line-amt"><b>{item.expectedAmountCents === null ? "varies" : money(item.expectedAmountCents, currency)}</b><small>{item.active ? "RENEWS" : "PAUSED"}</small></span>
-      </button>; })}
-      {!schedules.length && <p className="empty-copy">No scheduled bills yet. Enable recurrence while adding an expense.</p>}
-    </div>
-  </section>;
-}
-
-
-function SettleUp({ data, user, onPayment }: { data: HouseholdData; user: User; onPayment: (context?: Balance) => void }) {
-  const currency = data.household.currency;
-  const nets = data.members.map((member) => ({ member, net: data.balances.reduce((sum, item) => sum + (item.recipientUserId === member.id ? item.amountCents : 0) - (item.payerUserId === member.id ? item.amountCents : 0), 0) }));
-  const maxNet = Math.max(...nets.map((entry) => Math.abs(entry.net)), 1);
-  const planSubtitle = (item: Balance) => {
-    const direct = data.balances.find((candidate) => candidate.payerUserId === item.payerUserId && candidate.recipientUserId === item.recipientUserId);
-    const names = (direct?.components ?? []).map((component) => component.billName);
-    if (!names.length) return "clears combined balances";
-    return `clears ${names.slice(0, 2).join(" + ")}${names.length > 2 ? ` + ${names.length - 2} more` : ""}`;
+  type FeedItem = { key: string; when: number; month: string; kind: "bill"; bill: Bill } | { key: string; when: number; month: string; kind: "payment"; payment: Payment };
+  const monthOf = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const items: FeedItem[] = [
+    ...data.bills.map((bill) => ({ key: `bill:${bill.id}`, when: +new Date(bill.dueDate ?? bill.createdAt), month: bill.periodLabel, kind: "bill" as const, bill })),
+    ...data.payments.map((payment) => ({ key: `payment:${payment.id}`, when: +new Date(payment.paidAt), month: monthOf(payment.paidAt), kind: "payment" as const, payment })),
+  ].sort((a, b) => b.when - a.when);
+  const groups: Array<{ month: string; items: FeedItem[] }> = [];
+  for (const item of items) { const group = groups.find((entry) => entry.month === item.month); if (group) group.items.push(item); else groups.push({ month: item.month, items: [item] }); }
+  const monthMeta = (group: { month: string; items: FeedItem[] }) => {
+    const monthBills = group.items.filter((item) => item.kind === "bill").map((item) => (item as { bill: Bill }).bill);
+    if (!monthBills.length) return { label: "payments", done: false };
+    const recorded = monthBills.reduce((sum, bill) => sum + bill.amountCents, 0);
+    const done = monthBills.every((bill) => bill.status === "settled");
+    return done ? { label: "settled up ✓", done: true } : { label: `${money(recorded, currency)} recorded`, done: false };
   };
-  return <section className="page-content settle-view">
-    <div className="settle-toolbar"><p>{data.simplifiedBalances.length ? `${data.simplifiedBalances.length} payment${data.simplifiedBalances.length === 1 ? "" : "s"} would zero the household.` : "Everyone is settled up."}</p></div>
-    <div className="settle-nets">{nets.map(({ member, net: amount }) => <div key={member.id} className={`settle-net${amount > 0 ? " pos" : amount < 0 ? " neg" : ""}`}><Avatar name={member.displayName} /><small>{member.id === user.id ? "You" : member.displayName}</small><b>{amount > 0 ? "+" : amount < 0 ? "−" : ""}{money(Math.abs(amount), currency)}</b><span className="settle-netbar"><i style={{ width: `${Math.round((Math.abs(amount) / maxNet) * 100)}%` }} /></span></div>)}</div>
-    <div className="settle-plan">
-      <div className="bills-band-head"><strong>The plan</strong><small>fewest payments to clear every balance</small></div>
-      <p className="settle-plan-note">Suggestions only — the ledger never changes until money is confirmed received.</p>
-      {data.simplifiedBalances.map((item) => <div className="settle-prow" key={`${item.payerUserId}:${item.recipientUserId}`}>
-        <span className="avatar-pair"><Avatar name={item.payerName ?? ""} /><Avatar name={item.recipientName ?? ""} /></span>
-        <span className="settle-prow-text"><b>{item.payerUserId === user.id ? `You pay ${item.recipientName}` : item.recipientUserId === user.id ? `${item.payerName} pays you` : `${item.payerName} pays ${item.recipientName}`}</b><small>{planSubtitle(item)}</small></span>
-        <span className="settle-prow-amt">{money(item.amountCents, currency)}</span>
-        {item.recipientUserId === user.id ? <button className="settle-confirm" onClick={() => onPayment(item)}>Got it? Confirm</button> : <span className="settle-wait">{`waiting on ${item.recipientName}`}</span>}
-      </div>)}
-      {!data.simplifiedBalances.length && <p className="empty-copy">Nothing to settle — new bills will build a plan here.</p>}
-    </div>
-    <div className="settle-direct">
-      <div className="bills-band-head"><strong>Direct balances</strong><small>the record behind the plan · {data.balances.length} open</small></div>
-      {data.balances.map((item) => <div className="settle-drow" key={`${item.payerUserId}:${item.recipientUserId}`}><span className="settle-prow-text"><b>{item.payerUserId === user.id ? `You owe ${item.recipientName}` : item.recipientUserId === user.id ? `${item.payerName} owes you` : `${item.payerName} owes ${item.recipientName}`}</b><small>{(item.components ?? []).map((component) => component.billName).join(" + ") || "open balance"}</small></span><span className="settle-prow-amt">{money(item.amountCents, currency)}</span></div>)}
-      {!data.balances.length && <p className="empty-copy">Everyone is settled up.</p>}
-    </div>
+  const sideFor = (bill: Bill) => {
+    const owe = youOweByBill.get(bill.id) ?? 0;
+    const owed = owedToYouByBill.get(bill.id) ?? 0;
+    if (owe > 0) return { label: "you borrowed", amount: money(owe, currency), tone: "borrowed" };
+    if (owed > 0) return { label: "you lent", amount: money(owed, currency), tone: "lent" };
+    if (bill.status === "settled") return { label: "settled", amount: "✓", tone: "done" };
+    return { label: "not involved", amount: "—", tone: "done" };
+  };
+  const firstName = (name?: string | null) => (name ?? "").split(/\s+/)[0] || "Someone";
+  return <section className="page-content feed-view">
+    <button className="feed-sched" onClick={() => setSchedOpen((value) => !value)} aria-expanded={schedOpen}>
+      <RepeatDuotone size={17} weight="duotone" />
+      <span className="feed-sched-text"><b>Scheduled</b><small>{schedules.length ? `${schedules.length} recurring${monthlyEquivalent > 0 ? ` · ≈ ${money(monthlyEquivalent, currency)} / mo` : ""}` : "no recurring bills yet"}</small></span>
+      <span className="feed-chev">{schedOpen ? "⌄" : "›"}</span>
+    </button>
+    {schedOpen && schedules.map((item) => { const date = new Date(item.nextOccurrence); return <button className="bill-line sched" key={item.id} onClick={() => onEditRecurring(item)}>
+      <span className="bill-when">{date.toLocaleDateString(undefined, { month: "short" }).toUpperCase()} {date.getDate()}</span>
+      <span className="bill-line-text"><strong>{item.name}</strong><small>{item.cadence} · splits {item.templateConfig.allocations.length} way{item.templateConfig.allocations.length === 1 ? "" : "s"}</small></span>
+      <span className="bill-line-amt"><b>{item.expectedAmountCents === null ? "varies" : money(item.expectedAmountCents, currency)}</b><small>{item.active ? "RENEWS" : "PAUSED"}</small></span>
+    </button>; })}
+    {schedOpen && !schedules.length && <p className="empty-copy">Enable “repeats” while adding a bill to schedule it.</p>}
+    {groups.map((group) => { const meta = monthMeta(group); return <div className="feed-month" key={group.month}>
+      <div className="feed-month-head"><b>{group.month}</b><span className={meta.done ? "done" : ""}>{meta.label}</span></div>
+      {group.items.map((item) => {
+        if (item.kind === "bill") {
+          const bill = item.bill;
+          const Icon = CATEGORY_ICONS[bill.category] ?? CATEGORY_ICONS.other;
+          const side = sideFor(bill);
+          const date = new Date(bill.dueDate ?? bill.createdAt);
+          return <button className="feed-row" key={item.key} onClick={() => onBillDetail(bill.id)}>
+            <span className="feed-date"><small>{date.toLocaleDateString(undefined, { month: "short" })}</small><b>{date.getDate()}</b></span>
+            <Icon size={19} weight="duotone" className={`feed-glyph bill-cat cat-${bill.category}`} aria-hidden="true" />
+            <span className="feed-main"><b>{bill.name}</b><small>{bill.payerUserId === user.id ? "You" : firstName(bill.payerName ?? bill.createdByName)} paid {money(bill.amountCents, currency)}{bill.amountState === "estimated" ? " · estimated" : ""}</small></span>
+            <span className={`feed-side ${side.tone}`}><small>{side.label}</small><b>{side.amount}</b></span>
+          </button>;
+        }
+        const payment = item.payment;
+        const date = new Date(payment.paidAt);
+        return <button className="feed-row pay" key={item.key} disabled={!payment.billId} onClick={() => payment.billId && onBillDetail(payment.billId)}>
+          <span className="feed-date"><small>{date.toLocaleDateString(undefined, { month: "short" })}</small><b>{date.getDate()}</b></span>
+          <HandCoins size={19} weight="duotone" className="feed-glyph glyph-pay" aria-hidden="true" />
+          <span className="feed-main"><b>{payment.payerUserId === user.id ? "You" : firstName(payment.payerName)} paid {payment.recipientUserId === user.id ? "you" : firstName(payment.recipientName)}</b><small>{payment.billName ? `toward ${payment.billName}` : "payment"} · confirmed</small></span>
+          <span className="feed-side pay"><b>{payment.recipientUserId === user.id ? "+" : ""}{money(payment.amountCents, currency)}</b></span>
+        </button>;
+      })}
+    </div>; })}
+    {!items.length && <p className="empty-copy">No bills yet. Add the first shared expense.</p>}
   </section>;
 }
 

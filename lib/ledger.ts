@@ -76,8 +76,10 @@ export async function updateBill(billId: string, householdId: string, actorUserI
 
 export async function householdSnapshot(householdId: string) {
   const db = getDb();
-  const [billRows, obligationRows, paymentRows, closureRows, claimRows] = await Promise.all([
+  const [billRows, contributionRows, obligationRows, paymentRows, closureRows, claimRows] = await Promise.all([
     db.select().from(bills).where(and(eq(bills.householdId, householdId), isNull(bills.deletedAt))).orderBy(desc(bills.createdAt)),
+    db.select({ billId: billContributions.billId, payerUserId: billContributions.payerUserId, amountCents: billContributions.amountCents })
+      .from(billContributions).innerJoin(bills, eq(bills.id, billContributions.billId)).where(and(eq(bills.householdId, householdId), isNull(bills.deletedAt))),
     db.select({ id: obligations.id, billId: obligations.billId, debtorUserId: obligations.debtorUserId, creditorUserId: obligations.creditorUserId, amountCents: obligations.originalAmountCents, billName: bills.name, billCategory: bills.category })
       .from(obligations).innerJoin(bills, eq(bills.id, obligations.billId)).where(and(eq(obligations.householdId, householdId), eq(obligations.active, true))),
     db.select({ id: payments.id, billId: payments.billId, payerUserId: payments.payerUserId, recipientUserId: payments.recipientUserId, createdByUserId: payments.createdByUserId, payerName: paymentPayer.displayName, recipientName: paymentRecipient.displayName, billName: bills.name, amountCents: payments.amountCents, note: payments.note, paidAt: payments.paidAt })
@@ -135,11 +137,17 @@ export async function householdSnapshot(householdId: string) {
     return items.filter((item) => item.amountCents > 0);
   };
   const simplified = simplifyBalances(balances).map((item) => ({ payerUserId: item.debtorUserId, recipientUserId: item.creditorUserId, amountCents: item.amountCents }));
-  const userIds = [...new Set(balances.concat(simplified).flatMap((item) => [item.payerUserId, item.recipientUserId]).concat(billRows.map((bill) => bill.createdByUserId), paymentRows.map((payment) => payment.createdByUserId), claimRows.flatMap((claim) => [claim.debtorUserId, claim.creditorUserId])))];
+  // Largest contributor per bill — the "Kiran paid $128.40" line in the feed.
+  const primaryPayer = new Map<string, { payerUserId: string; amountCents: number }>();
+  for (const item of contributionRows) {
+    const current = primaryPayer.get(item.billId);
+    if (!current || item.amountCents > current.amountCents) primaryPayer.set(item.billId, { payerUserId: item.payerUserId, amountCents: item.amountCents });
+  }
+  const userIds = [...new Set(balances.concat(simplified).flatMap((item) => [item.payerUserId, item.recipientUserId]).concat(billRows.map((bill) => bill.createdByUserId), contributionRows.map((item) => item.payerUserId), paymentRows.map((payment) => payment.createdByUserId), claimRows.flatMap((claim) => [claim.debtorUserId, claim.creditorUserId])))];
   const names = userIds.length ? await db.select({ id: users.id, displayName: users.displayName }).from(users).where(inArray(users.id, userIds)) : [];
   const nameMap = new Map(names.map((item) => [item.id, item.displayName]));
   return {
-    bills: billRows.map((bill) => ({ ...bill, createdByName: nameMap.get(bill.createdByUserId) })),
+    bills: billRows.map((bill) => ({ ...bill, createdByName: nameMap.get(bill.createdByUserId), payerUserId: primaryPayer.get(bill.id)?.payerUserId ?? null, payerName: primaryPayer.get(bill.id) ? nameMap.get(primaryPayer.get(bill.id)!.payerUserId) : null })),
     balances: balances.map((item) => ({ ...item, payerName: nameMap.get(item.payerUserId), recipientName: nameMap.get(item.recipientUserId), components: componentsFor(item.payerUserId, item.recipientUserId, item.amountCents) })),
     simplifiedBalances: simplified.map((item) => ({ ...item, payerName: nameMap.get(item.payerUserId), recipientName: nameMap.get(item.recipientUserId) })),
     payments: paymentRows.map((payment) => ({ ...payment, actorName: nameMap.get(payment.createdByUserId) })),
